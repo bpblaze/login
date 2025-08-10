@@ -1,859 +1,1429 @@
--- Advanced Login System with Admin Panel
+-- Premium Admin System with User Management - Improved Version
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
 -- Clear existing GUIs
-if playerGui:FindFirstChild("LoginSystem") then playerGui.LoginSystem:Destroy() end
-if playerGui:FindFirstChild("AdminPanel") then playerGui.AdminPanel:Destroy() end
+if playerGui:FindFirstChild("ZonanraSystem") then
+    playerGui.ZonanraSystem:Destroy()
+end
+
+-- Premium Color Scheme
+local COLORS = {
+    BACKGROUND = Color3.new(0, 0, 0), -- Fully transparent background
+    SURFACE = Color3.fromRGB(18, 18, 25),
+    PANEL = Color3.fromRGB(25, 25, 35),
+    PRIMARY = Color3.fromRGB(99, 102, 241),
+    SUCCESS = Color3.fromRGB(16, 185, 129),
+    WARNING = Color3.fromRGB(245, 158, 11),
+    DANGER = Color3.fromRGB(239, 68, 68),
+    TEXT = Color3.fromRGB(255, 255, 255),
+    MUTED = Color3.fromRGB(156, 163, 175),
+    ACCENT = Color3.fromRGB(139, 92, 246)
+}
+
+-- Device detection
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- User Management System
+local connectedUsers = {}
+local blacklistedUsers = {}
+local userSessions = {}
+
+-- Previous login storage for suggestions
+local previousLogins = {}
+local rememberedCredentials = {}
 
 -- Accounts storage
 local accounts = {
-    -- Default admin account (username: admin, password: admin123)
-    ["admin"] = {
-        password = "admin123",
-        isAdmin = true
-    }
+    ["admin"] = {password = "admin123", isAdmin = true},
+    ["test"] = {password = "test123", isAdmin = false}
 }
 
--- Create main login GUI
-local loginScreen = Instance.new("ScreenGui")
-loginScreen.Name = "LoginSystem"
-loginScreen.Parent = playerGui
+-- Feature states for regular users
+local userStates = {
+    flying = false,
+    noclip = false,
+    godMode = false,
+    speedBoost = false,
+    jumpBoost = false,
+    aimlock = false
+}
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0.9, 0, 0, 450)
-mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = loginScreen
+-- Utility Functions
+local function createGlow(parent, color, size)
+    local glow = Instance.new("ImageLabel")
+    glow.Name = "Glow"
+    glow.Size = UDim2.new(1, size or 20, 1, size or 20)
+    glow.Position = UDim2.new(0, -(size or 20)/2, 0, -(size or 20)/2)
+    glow.BackgroundTransparency = 1
+    glow.Image = "rbxasset://textures/ui/Glow.png"
+    glow.ImageColor3 = color or COLORS.PRIMARY
+    glow.ImageTransparency = 0.7
+    glow.ZIndex = parent.ZIndex - 1
+    glow.Parent = parent
+    return glow
+end
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 12)
-UICorner.Parent = mainFrame
+local function createCorner(radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 12)
+    return corner
+end
 
-local title = Instance.new("TextLabel")
-title.Text = "PLAYER LOGIN"
-title.Size = UDim2.new(1, 0, 0, 70)
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 28
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.BackgroundTransparency = 1
-title.Parent = mainFrame
+local function createStroke(color, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or COLORS.PRIMARY
+    stroke.Thickness = thickness or 1
+    stroke.Transparency = 0.5
+    return stroke
+end
 
--- Login Frame
-local loginFrame = Instance.new("Frame")
-loginFrame.Size = UDim2.new(1, 0, 1, -70)
-loginFrame.Position = UDim2.new(0, 0, 0, 70)
-loginFrame.BackgroundTransparency = 1
-loginFrame.Visible = true
-loginFrame.Parent = mainFrame
+local function makeDraggable(frame, handle)
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
 
-local inputPadding = 0.1
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+        end
+    end)
 
--- Username Input
-local usernameBox = Instance.new("TextBox")
-usernameBox.PlaceholderText = "Enter username"
-usernameBox.Size = UDim2.new(0.8, 0, 0, 50)
-usernameBox.Position = UDim2.new(inputPadding, 0, 0.1, 0)
-usernameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-usernameBox.TextColor3 = Color3.new(1, 1, 1)
-usernameBox.Font = Enum.Font.Gotham
-usernameBox.TextSize = 18
-usernameBox.ClearTextOnFocus = false
-usernameBox.Parent = loginFrame
+    handle.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
 
-local UICornerUser = Instance.new("UICorner")
-UICornerUser.CornerRadius = UDim.new(0, 8)
-UICornerUser.Parent = usernameBox
-
--- Password Input (with proper masking)
-local passwordBox = Instance.new("TextBox")
-passwordBox.PlaceholderText = "Enter password"
-passwordBox.Size = UDim2.new(0.8, 0, 0, 50)
-passwordBox.Position = UDim2.new(inputPadding, 0, 0.3, 0)
-passwordBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-passwordBox.TextColor3 = Color3.new(1, 1, 1)
-passwordBox.Font = Enum.Font.Gotham
-passwordBox.TextSize = 18
-passwordBox.ClearTextOnFocus = false
-passwordBox.Parent = loginFrame
-
-local UICornerPass = Instance.new("UICorner")
-UICornerPass.CornerRadius = UDim.new(0, 8)
-UICornerPass.Parent = passwordBox
-
--- Real password storage
-local realPassword = ""
-passwordBox.FocusLost:Connect(function()
-    if #passwordBox.Text > #realPassword then
-        -- Adding characters
-        realPassword = realPassword .. string.sub(passwordBox.Text, #realPassword + 1)
-    elseif #passwordBox.Text < #realPassword then
-        -- Removing characters
-        realPassword = string.sub(realPassword, 1, #passwordBox.Text)
-    end
-    passwordBox.Text = string.rep("*", #realPassword)
-end)
-
--- Show Password Toggle (now works properly)
-local showPassword = Instance.new("TextButton")
-showPassword.Text = "👁"
-showPassword.Size = UDim2.new(0, 40, 0, 40)
-showPassword.Position = UDim2.new(0.8 + inputPadding - 0.05, 0, 0.3, 5)
-showPassword.BackgroundTransparency = 1
-showPassword.TextColor3 = Color3.new(1, 1, 1)
-showPassword.TextSize = 20
-showPassword.Parent = loginFrame
-
-local isPasswordVisible = false
-showPassword.MouseButton1Click:Connect(function()
-    isPasswordVisible = not isPasswordVisible
-    if isPasswordVisible then
-        passwordBox.Text = realPassword
-        showPassword.Text = "👁"
-    else
-        passwordBox.Text = string.rep("*", #realPassword)
-        showPassword.Text = "👁"
-    end
-end)
-
--- Login Button
-local loginButton = Instance.new("TextButton")
-loginButton.Text = "LOGIN"
-loginButton.Size = UDim2.new(0.8, 0, 0, 50)
-loginButton.Position = UDim2.new(inputPadding, 0, 0.5, 0)
-loginButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-loginButton.TextColor3 = Color3.new(1, 1, 1)
-loginButton.Font = Enum.Font.GothamBold
-loginButton.TextSize = 20
-loginButton.Parent = loginFrame
-
-local UICornerLogin = Instance.new("UICorner")
-UICornerLogin.CornerRadius = UDim.new(0, 8)
-UICornerLogin.Parent = loginButton
-
--- Signup Button
-local switchToSignup = Instance.new("TextButton")
-switchToSignup.Text = "CREATE NEW ACCOUNT"
-switchToSignup.Size = UDim2.new(0.8, 0, 0, 40)
-switchToSignup.Position = UDim2.new(inputPadding, 0, 0.7, 0)
-switchToSignup.BackgroundTransparency = 1
-switchToSignup.TextColor3 = Color3.fromRGB(100, 180, 255)
-switchToSignup.Font = Enum.Font.Gotham
-switchToSignup.TextSize = 16
-switchToSignup.Parent = loginFrame
-
--- Signup Frame
-local signupFrame = Instance.new("Frame")
-signupFrame.Size = UDim2.new(1, 0, 1, -70)
-signupFrame.Position = UDim2.new(0, 0, 0, 70)
-signupFrame.BackgroundTransparency = 1
-signupFrame.Visible = false
-signupFrame.Parent = mainFrame
-
--- New Username
-local newUsernameBox = Instance.new("TextBox")
-newUsernameBox.PlaceholderText = "Choose username"
-newUsernameBox.Size = UDim2.new(0.8, 0, 0, 50)
-newUsernameBox.Position = UDim2.new(inputPadding, 0, 0.05, 0)
-newUsernameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-newUsernameBox.TextColor3 = Color3.new(1, 1, 1)
-newUsernameBox.Font = Enum.Font.Gotham
-newUsernameBox.TextSize = 18
-newUsernameBox.ClearTextOnFocus = false
-newUsernameBox.Parent = signupFrame
-
-local UICornerNewUser = Instance.new("UICorner")
-UICornerNewUser.CornerRadius = UDim.new(0, 8)
-UICornerNewUser.Parent = newUsernameBox
-
--- New Password (with proper masking)
-local newPasswordBox = Instance.new("TextBox")
-newPasswordBox.PlaceholderText = "Choose password"
-newPasswordBox.Size = UDim2.new(0.8, 0, 0, 50)
-newPasswordBox.Position = UDim2.new(inputPadding, 0, 0.2, 0)
-newPasswordBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-newPasswordBox.TextColor3 = Color3.new(1, 1, 1)
-newPasswordBox.Font = Enum.Font.Gotham
-newPasswordBox.TextSize = 18
-newPasswordBox.ClearTextOnFocus = false
-newPasswordBox.Parent = signupFrame
-
-local UICornerNewPass = Instance.new("UICorner")
-UICornerNewPass.CornerRadius = UDim.new(0, 8)
-UICornerNewPass.Parent = newPasswordBox
-
-local newRealPassword = ""
-newPasswordBox.FocusLost:Connect(function()
-    if #newPasswordBox.Text > #newRealPassword then
-        newRealPassword = newRealPassword .. string.sub(newPasswordBox.Text, #newRealPassword + 1)
-    elseif #newPasswordBox.Text < #newRealPassword then
-        newRealPassword = string.sub(newRealPassword, 1, #newPasswordBox.Text)
-    end
-    newPasswordBox.Text = string.rep("*", #newRealPassword)
-end)
-
--- Confirm Password
-local confirmPasswordBox = Instance.new("TextBox")
-confirmPasswordBox.PlaceholderText = "Confirm password"
-confirmPasswordBox.Size = UDim2.new(0.8, 0, 0, 50)
-confirmPasswordBox.Position = UDim2.new(inputPadding, 0, 0.35, 0)
-confirmPasswordBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-confirmPasswordBox.TextColor3 = Color3.new(1, 1, 1)
-confirmPasswordBox.Font = Enum.Font.Gotham
-confirmPasswordBox.TextSize = 18
-confirmPasswordBox.ClearTextOnFocus = false
-confirmPasswordBox.Parent = signupFrame
-
-local UICornerConfirmPass = Instance.new("UICorner")
-UICornerConfirmPass.CornerRadius = UDim.new(0, 8)
-UICornerConfirmPass.Parent = confirmPasswordBox
-
-local confirmRealPassword = ""
-confirmPasswordBox.FocusLost:Connect(function()
-    if #confirmPasswordBox.Text > #confirmRealPassword then
-        confirmRealPassword = confirmRealPassword .. string.sub(confirmPasswordBox.Text, #confirmRealPassword + 1)
-    elseif #confirmPasswordBox.Text < #confirmRealPassword then
-        confirmRealPassword = string.sub(confirmRealPassword, 1, #confirmPasswordBox.Text)
-    end
-    confirmPasswordBox.Text = string.rep("*", #confirmRealPassword)
-end)
-
--- Show Password Toggles for Signup
-local showSignupPassword = Instance.new("TextButton")
-showSignupPassword.Text = "👁"
-showSignupPassword.Size = UDim2.new(0, 40, 0, 40)
-showSignupPassword.Position = UDim2.new(0.8 + inputPadding - 0.05, 0, 0.2, 5)
-showSignupPassword.BackgroundTransparency = 1
-showSignupPassword.TextColor3 = Color3.new(1, 1, 1)
-showSignupPassword.TextSize = 20
-showSignupPassword.Parent = signupFrame
-
-local isNewPasswordVisible = false
-showSignupPassword.MouseButton1Click:Connect(function()
-    isNewPasswordVisible = not isNewPasswordVisible
-    if isNewPasswordVisible then
-        newPasswordBox.Text = newRealPassword
-        showSignupPassword.Text = "👁"
-    else
-        newPasswordBox.Text = string.rep("*", #newRealPassword)
-        showSignupPassword.Text = "👁"
-    end
-end)
-
-local showConfirmPassword = Instance.new("TextButton")
-showConfirmPassword.Text = "👁"
-showConfirmPassword.Size = UDim2.new(0, 40, 0, 40)
-showConfirmPassword.Position = UDim2.new(0.8 + inputPadding - 0.05, 0, 0.35, 5)
-showConfirmPassword.BackgroundTransparency = 1
-showConfirmPassword.TextColor3 = Color3.new(1, 1, 1)
-showConfirmPassword.TextSize = 20
-showConfirmPassword.Parent = signupFrame
-
-local isConfirmPasswordVisible = false
-showConfirmPassword.MouseButton1Click:Connect(function()
-    isConfirmPasswordVisible = not isConfirmPasswordVisible
-    if isConfirmPasswordVisible then
-        confirmPasswordBox.Text = confirmRealPassword
-        showConfirmPassword.Text = "👁"
-    else
-        confirmPasswordBox.Text = string.rep("*", #confirmRealPassword)
-        showConfirmPassword.Text = "👁"
-    end
-end)
-
--- Create Account Button
-local signupButton = Instance.new("TextButton")
-signupButton.Text = "CREATE ACCOUNT"
-signupButton.Size = UDim2.new(0.8, 0, 0, 50)
-signupButton.Position = UDim2.new(inputPadding, 0, 0.5, 0)
-signupButton.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-signupButton.TextColor3 = Color3.new(1, 1, 1)
-signupButton.Font = Enum.Font.GothamBold
-signupButton.TextSize = 20
-signupButton.Parent = signupFrame
-
-local UICornerSignup = Instance.new("UICorner")
-UICornerSignup.CornerRadius = UDim.new(0, 8)
-UICornerSignup.Parent = signupButton
-
--- Back to Login
-local switchToLogin = Instance.new("TextButton")
-switchToLogin.Text = "BACK TO LOGIN"
-switchToLogin.Size = UDim2.new(0.8, 0, 0, 40)
-switchToLogin.Position = UDim2.new(inputPadding, 0, 0.65, 0)
-switchToLogin.BackgroundTransparency = 1
-switchToLogin.TextColor3 = Color3.fromRGB(100, 180, 255)
-switchToLogin.Font = Enum.Font.Gotham
-switchToLogin.TextSize = 16
-switchToLogin.Parent = signupFrame
-
--- Admin Panel GUI
-local adminPanel = Instance.new("ScreenGui")
-adminPanel.Name = "AdminPanel"
-adminPanel.Enabled = false
-adminPanel.Parent = playerGui
-
-local adminFrame = Instance.new("Frame")
-adminFrame.Size = UDim2.new(0.9, 0, 0.9, 0)
-adminFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-adminFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-adminFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-adminFrame.BorderSizePixel = 0
-adminFrame.Parent = adminPanel
-
-local adminCorner = Instance.new("UICorner")
-adminCorner.CornerRadius = UDim.new(0, 12)
-adminCorner.Parent = adminFrame
-
--- Player Avatar Display
-local avatarFrame = Instance.new("Frame")
-avatarFrame.Size = UDim2.new(0.3, 0, 0.3, 0)
-avatarFrame.Position = UDim2.new(0.05, 0, 0.05, 0)
-avatarFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-avatarFrame.Parent = adminFrame
-
-local avatarCorner = Instance.new("UICorner")
-avatarCorner.CornerRadius = UDim.new(0, 12)
-avatarCorner.Parent = avatarFrame
-
-local avatarImage = Instance.new("ImageLabel")
-avatarImage.Size = UDim2.new(0.9, 0, 0.9, 0)
-avatarImage.Position = UDim2.new(0.05, 0, 0.05, 0)
-avatarImage.BackgroundTransparency = 1
-avatarImage.Image = "https://www.roblox.com/headshot-thumbnail/image?userId="..player.UserId.."&width=420&height=420&format=png"
-avatarImage.Parent = avatarFrame
-
-local usernameLabel = Instance.new("TextLabel")
-usernameLabel.Size = UDim2.new(1, 0, 0.1, 0)
-usernameLabel.Position = UDim2.new(0, 0, 0.9, 0)
-usernameLabel.Text = player.Name
-usernameLabel.TextColor3 = Color3.new(1, 1, 1)
-usernameLabel.BackgroundTransparency = 1
-usernameLabel.Font = Enum.Font.GothamBold
-usernameLabel.TextSize = 18
-usernameLabel.Parent = avatarFrame
-
--- Admin Commands
-local commandsFrame = Instance.new("Frame")
-commandsFrame.Size = UDim2.new(0.6, 0, 0.9, 0)
-commandsFrame.Position = UDim2.new(0.35, 0, 0.05, 0)
-commandsFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-commandsFrame.Parent = adminFrame
-
-local commandsCorner = Instance.new("UICorner")
-commandsCorner.CornerRadius = UDim.new(0, 12)
-commandsCorner.Parent = commandsFrame
-
-local commandsTitle = Instance.new("TextLabel")
-commandsTitle.Text = "ADMIN COMMANDS"
-commandsTitle.Size = UDim2.new(1, 0, 0.1, 0)
-commandsTitle.Font = Enum.Font.GothamBlack
-commandsTitle.TextSize = 24
-commandsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-commandsTitle.BackgroundTransparency = 1
-commandsTitle.Parent = commandsFrame
-
--- Speed Control
-local speedFrame = Instance.new("Frame")
-speedFrame.Size = UDim2.new(0.9, 0, 0.15, 0)
-speedFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
-speedFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-speedFrame.Parent = commandsFrame
-
-local speedCorner = Instance.new("UICorner")
-speedCorner.CornerRadius = UDim.new(0, 8)
-speedCorner.Parent = speedFrame
-
-local speedLabel = Instance.new("TextLabel")
-speedLabel.Text = "WALKSPEED: 16"
-speedLabel.Size = UDim2.new(0.5, 0, 1, 0)
-speedLabel.Font = Enum.Font.Gotham
-speedLabel.TextSize = 18
-speedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-speedLabel.BackgroundTransparency = 1
-speedLabel.TextXAlignment = Enum.TextXAlignment.Left
-speedLabel.Parent = speedFrame
-
-local speedIncrease = Instance.new("TextButton")
-speedIncrease.Text = "+"
-speedIncrease.Size = UDim2.new(0.2, 0, 0.7, 0)
-speedIncrease.Position = UDim2.new(0.7, 0, 0.15, 0)
-speedIncrease.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-speedIncrease.TextColor3 = Color3.new(1, 1, 1)
-speedIncrease.Font = Enum.Font.GothamBold
-speedIncrease.TextSize = 20
-speedIncrease.Parent = speedFrame
-
-local speedDecrease = Instance.new("TextButton")
-speedDecrease.Text = "-"
-speedDecrease.Size = UDim2.new(0.2, 0, 0.7, 0)
-speedDecrease.Position = UDim2.new(0.5, 0, 0.15, 0)
-speedDecrease.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-speedDecrease.TextColor3 = Color3.new(1, 1, 1)
-speedDecrease.Font = Enum.Font.GothamBold
-speedDecrease.TextSize = 20
-speedDecrease.Parent = speedFrame
-
--- Jump Power Control
-local jumpFrame = Instance.new("Frame")
-jumpFrame.Size = UDim2.new(0.9, 0, 0.15, 0)
-jumpFrame.Position = UDim2.new(0.05, 0, 0.35, 0)
-jumpFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-jumpFrame.Parent = commandsFrame
-
-local jumpCorner = Instance.new("UICorner")
-jumpCorner.CornerRadius = UDim.new(0, 8)
-jumpCorner.Parent = jumpFrame
-
-local jumpLabel = Instance.new("TextLabel")
-jumpLabel.Text = "JUMP POWER: 50"
-jumpLabel.Size = UDim2.new(0.5, 0, 1, 0)
-jumpLabel.Font = Enum.Font.Gotham
-jumpLabel.TextSize = 18
-jumpLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-jumpLabel.BackgroundTransparency = 1
-jumpLabel.TextXAlignment = Enum.TextXAlignment.Left
-jumpLabel.Parent = jumpFrame
-
-local jumpIncrease = Instance.new("TextButton")
-jumpIncrease.Text = "+"
-jumpIncrease.Size = UDim2.new(0.2, 0, 0.7, 0)
-jumpIncrease.Position = UDim2.new(0.7, 0, 0.15, 0)
-jumpIncrease.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-jumpIncrease.TextColor3 = Color3.new(1, 1, 1)
-jumpIncrease.Font = Enum.Font.GothamBold
-jumpIncrease.TextSize = 20
-jumpIncrease.Parent = jumpFrame
-
-local jumpDecrease = Instance.new("TextButton")
-jumpDecrease.Text = "-"
-jumpDecrease.Size = UDim2.new(0.2, 0, 0.7, 0)
-jumpDecrease.Position = UDim2.new(0.5, 0, 0.15, 0)
-jumpDecrease.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-jumpDecrease.TextColor3 = Color3.new(1, 1, 1)
-jumpDecrease.Font = Enum.Font.GothamBold
-jumpDecrease.TextSize = 20
-jumpDecrease.Parent = jumpFrame
-
--- Fly Toggle
-local flyButton = Instance.new("TextButton")
-flyButton.Text = "TOGGLE FLY"
-flyButton.Size = UDim2.new(0.9, 0, 0.15, 0)
-flyButton.Position = UDim2.new(0.05, 0, 0.55, 0)
-flyButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-flyButton.TextColor3 = Color3.new(1, 1, 1)
-flyButton.Font = Enum.Font.GothamBold
-flyButton.TextSize = 18
-flyButton.Parent = commandsFrame
-
-local flyCorner = Instance.new("UICorner")
-flyCorner.CornerRadius = UDim.new(0, 8)
-flyCorner.Parent = flyButton
-
--- Noclip Toggle
-local noclipButton = Instance.new("TextButton")
-noclipButton.Text = "TOGGLE NOCLIP"
-noclipButton.Size = UDim2.new(0.9, 0, 0.15, 0)
-noclipButton.Position = UDim2.new(0.05, 0, 0.75, 0)
-noclipButton.BackgroundColor3 = Color3.fromRGB(215, 120, 0)
-noclipButton.TextColor3 = Color3.new(1, 1, 1)
-noclipButton.Font = Enum.Font.GothamBold
-noclipButton.TextSize = 18
-noclipButton.Parent = commandsFrame
-
-local noclipCorner = Instance.new("UICorner")
-noclipCorner.CornerRadius = UDim.new(0, 8)
-noclipCorner.Parent = noclipButton
-
--- Sign Out Button
-local signOutButton = Instance.new("TextButton")
-signOutButton.Text = "SIGN OUT"
-signOutButton.Size = UDim2.new(0.2, 0, 0.1, 0)
-signOutButton.Position = UDim2.new(0.75, 0, 0.05, 0)
-signOutButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-signOutButton.TextColor3 = Color3.new(1, 1, 1)
-signOutButton.Font = Enum.Font.GothamBold
-signOutButton.TextSize = 16
-signOutButton.Parent = adminFrame
-
-local signOutCorner = Instance.new("UICorner")
-signOutCorner.CornerRadius = UDim.new(0, 8)
-signOutCorner.Parent = signOutButton
-
--- Message Display
-local function showMessage(message, color)
-    local messageFrame = Instance.new("Frame")
-    messageFrame.Size = UDim2.new(0.8, 0, 0, 50)
-    messageFrame.Position = UDim2.new(0.1, 0, 0.8, 0)
-    messageFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
-    messageFrame.BorderSizePixel = 0
-    messageFrame.Parent = mainFrame
-    
-    local messageCorner = Instance.new("UICorner")
-    messageCorner.CornerRadius = UDim.new(0, 8)
-    messageCorner.Parent = messageFrame
-    
-    local messageLabel = Instance.new("TextLabel")
-    messageLabel.Text = message
-    messageLabel.Size = UDim2.new(1, 0, 1, 0)
-    messageLabel.TextColor3 = color or Color3.new(1, 0.5, 0.5)
-    messageLabel.BackgroundTransparency = 1
-    messageLabel.Font = Enum.Font.Gotham
-    messageLabel.TextSize = 16
-    messageLabel.Parent = messageFrame
-    
-    task.delay(3, function()
-        if messageFrame and messageFrame.Parent then
-            messageFrame:Destroy()
+    handle.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
         end
     end)
 end
 
--- UI Switching
-switchToSignup.MouseButton1Click:Connect(function()
-    loginFrame.Visible = false
-    signupFrame.Visible = true
-    newUsernameBox.Text = ""
-    newPasswordBox.Text = ""
-    newRealPassword = ""
-    confirmPasswordBox.Text = ""
-    confirmRealPassword = ""
-end)
+local function createButton(text, size, position, color, parent, textSize)
+    local button = Instance.new("TextButton")
+    button.Text = text
+    button.Size = size
+    button.Position = position
+    button.BackgroundColor3 = color
+    button.TextColor3 = COLORS.TEXT
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = textSize or (isMobile and 14 or 16)
+    button.BorderSizePixel = 0
+    button.ClipsDescendants = true
+    button.Parent = parent
 
-switchToLogin.MouseButton1Click:Connect(function()
-    loginFrame.Visible = true
-    signupFrame.Visible = false
-    usernameBox.Text = ""
-    passwordBox.Text = ""
-    realPassword = ""
-end)
+    createCorner(8).Parent = button
+    createStroke(color, 1).Parent = button
 
--- Login Functionality
-loginButton.MouseButton1Click:Connect(function()
-    local username = usernameBox.Text:gsub("%s+", "")
-    local password = realPassword
-    
-    if username == "" or password == "" then
-        showMessage("Please fill in all fields")
-        return
-    end
-    
-    if accounts[username] then
-        if accounts[username].password == password then
-            -- Successful login
-            loginScreen.Enabled = false
-            adminPanel.Enabled = true
-            
-            -- Update avatar image
-            avatarImage.Image = "https://www.roblox.com/headshot-thumbnail/image?userId="..player.UserId.."&width=420&height=420&format=png"
-            usernameLabel.Text = player.Name
-            
-            -- If admin, show admin panel
-            if accounts[username].isAdmin then
-                commandsFrame.Visible = true
-            else
-                commandsFrame.Visible = false
-            end
-            
-            showMessage("Login successful!", Color3.new(0, 1, 0))
-        else
-            showMessage("Incorrect password")
+    -- Gradient effect
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(1, Color3.new(0.8, 0.8, 0.8))
+    }
+    gradient.Rotation = 90
+    gradient.Parent = button
+
+    -- Hover effects
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {Size = size + UDim2.new(0, 4, 0, 2)}):Play()
+        createGlow(button, color, 30)
+    end)
+
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {Size = size}):Play()
+        if button:FindFirstChild("Glow") then
+            button.Glow:Destroy()
         end
-    else
-        showMessage("Account not found")
-    end
-end)
+    end)
 
--- Signup Functionality
-signupButton.MouseButton1Click:Connect(function()
-    local username = newUsernameBox.Text:gsub("%s+", "")
-    local password = newRealPassword
-    local confirmPassword = confirmRealPassword
-    
-    if username == "" or password == "" or confirmPassword == "" then
-        showMessage("Please fill all fields")
-        return
-    end
-    
-    if #username < 4 then
-        showMessage("Username too short (min 4 chars)")
-        return
-    end
-    
-    if #password < 6 then
-        showMessage("Password too short (min 6 chars)")
-        return
-    end
-    
-    if password ~= confirmPassword then
-        showMessage("Passwords don't match")
-        return
-    end
-    
-    if accounts[username] then
-        showMessage("Username already taken")
-    else
-        accounts[username] = {
-            password = password,
-            isAdmin = false
-        }
-        showMessage("Account created!", Color3.new(0, 1, 0))
-        loginFrame.Visible = true
-        signupFrame.Visible = false
-        usernameBox.Text = username
-        passwordBox.Text = ""
-        realPassword = ""
-    end
-end)
-
--- Admin Commands Functionality
-local currentSpeed = 16
-local currentJump = 50
-local flying = false
-local noclip = false
-local flySpeed = 50
-
--- Update character stats
-local function updateCharacter()
-    local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        humanoid.WalkSpeed = currentSpeed
-        humanoid.JumpPower = currentJump
-        
-        if flying then
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-        else
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
-        end
-    end
+    return button
 end
 
--- Speed Controls
-speedIncrease.MouseButton1Click:Connect(function()
-    currentSpeed = math.min(currentSpeed + 5, 100)
-    speedLabel.Text = "WALKSPEED: "..currentSpeed
-    updateCharacter()
-end)
+local function createInput(labelText, size, position, parent, isPassword)
+    local container = Instance.new("Frame")
+    container.Size = size
+    container.Position = position
+    container.BackgroundTransparency = 1
+    container.Parent = parent
 
-speedDecrease.MouseButton1Click:Connect(function()
-    currentSpeed = math.max(currentSpeed - 5, 16)
-    speedLabel.Text = "WALKSPEED: "..currentSpeed
-    updateCharacter()
-end)
+    local label = Instance.new("TextLabel")
+    label.Text = labelText
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = COLORS.MUTED
+    label.Font = Enum.Font.GothamSemibold
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
 
--- Jump Controls
-jumpIncrease.MouseButton1Click:Connect(function()
-    currentJump = math.min(currentJump + 10, 200)
-    jumpLabel.Text = "JUMP POWER: "..currentJump
-    updateCharacter()
-end)
+    local inputFrame = Instance.new("Frame")
+    inputFrame.Size = UDim2.new(1, 0, 1, -25)
+    inputFrame.Position = UDim2.new(0, 0, 0, 25)
+    inputFrame.BackgroundColor3 = COLORS.SURFACE
+    inputFrame.BorderSizePixel = 0
+    inputFrame.Parent = container
 
-jumpDecrease.MouseButton1Click:Connect(function()
-    currentJump = math.max(currentJump - 10, 50)
-    jumpLabel.Text = "JUMP POWER: "..currentJump
-    updateCharacter()
-end)
+    createCorner(8).Parent = inputFrame
+    createStroke(COLORS.PANEL, 1).Parent = inputFrame
 
--- Fly Toggle
-flyButton.MouseButton1Click:Connect(function()
-    flying = not flying
-    if flying then
-        flyButton.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-        
-        -- Fly logic
-        local character = player.Character or player.CharacterAdded:Wait()
-        local humanoid = character:WaitForChild("Humanoid")
-        
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-        
-        local bodyGyro = Instance.new("BodyGyro")
-        bodyGyro.P = 10000
-        bodyGyro.MaxTorque = Vector3.new(10000, 10000, 10000)
-        bodyGyro.CFrame = character.HumanoidRootPart.CFrame
-        bodyGyro.Parent = character.HumanoidRootPart
-        
-        local bodyVelocity = Instance.new("BodyVelocity")
-        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-        bodyVelocity.MaxForce = Vector3.new(10000, 10000, 10000)
-        bodyVelocity.Parent = character.HumanoidRootPart
-        
-        local flyConnection
-        flyConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            if not flying or not character or not character:FindFirstChild("HumanoidRootPart") then
-                if flyConnection then flyConnection:Disconnect() end
-                return
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(1, -20, 1, 0)
+    input.Position = UDim2.new(0, 10, 0, 0)
+    input.BackgroundTransparency = 1
+    input.TextColor3 = COLORS.TEXT
+    input.Font = Enum.Font.Gotham
+    input.TextSize = 16
+    input.PlaceholderText = ""
+    input.Text = ""
+    input.ClearTextOnFocus = false
+    input.Parent = inputFrame
+
+    -- Focus effects
+    input.Focused:Connect(function()
+        TweenService:Create(inputFrame:FindFirstChild("UIStroke"), TweenInfo.new(0.2), {Color = COLORS.PRIMARY, Thickness = 2}):Play()
+        createGlow(inputFrame, COLORS.PRIMARY, 20)
+    end)
+
+    input.FocusLost:Connect(function()
+        TweenService:Create(inputFrame:FindFirstChild("UIStroke"), TweenInfo.new(0.2), {Color = COLORS.PANEL, Thickness = 1}):Play()
+        if inputFrame:FindFirstChild("Glow") then
+            inputFrame.Glow:Destroy()
+        end
+    end)
+
+    if isPassword then
+        local realPassword = ""
+        local function updatePassword()
+            if #input.Text > #realPassword then
+                realPassword = realPassword .. string.sub(input.Text, #realPassword + 1)
+            elseif #input.Text < #realPassword then
+                realPassword = string.sub(realPassword, 1, #input.Text)
             end
-            
-            local cam = workspace.CurrentCamera
-            local root = character.HumanoidRootPart
-            
-            -- Get movement direction from input
-            local moveDirection = Vector3.new(0, 0, 0)
-            
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveDirection = moveDirection + (cam.CFrame.LookVector * flySpeed)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveDirection = moveDirection - (cam.CFrame.LookVector * flySpeed)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveDirection = moveDirection + (cam.CFrame.RightVector * flySpeed)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveDirection = moveDirection - (cam.CFrame.RightVector * flySpeed)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveDirection = moveDirection + Vector3.new(0, flySpeed, 0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                moveDirection = moveDirection - Vector3.new(0, flySpeed, 0)
-            end
-            
-            -- Apply movement
-            if bodyVelocity then
-                bodyVelocity.Velocity = moveDirection
-            end
-            
-            -- Face the camera direction
-            if bodyGyro then
-                bodyGyro.CFrame = CFrame.new(root.Position, root.Position + cam.CFrame.LookVector)
+            input.Text = string.rep("●", #realPassword)
+        end
+
+        input.FocusLost:Connect(updatePassword)
+        input:GetPropertyChangedSignal("Text"):Connect(function()
+            if #input.Text < #realPassword then
+                updatePassword()
             end
         end)
-    else
-        flyButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-        
-        local character = player.Character
-        if character then
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+
+        return input, function() return realPassword end
+    end
+
+    return input
+end
+
+local function showNotification(message, type, duration)
+    local notification = Instance.new("Frame")
+    notification.Size = UDim2.new(0, 350, 0, 80)
+    notification.Position = UDim2.new(1, -370, 0, 20)
+    notification.BackgroundColor3 = type == "success" and COLORS.SUCCESS or type == "error" and COLORS.DANGER or COLORS.PRIMARY
+    notification.BorderSizePixel = 0
+    notification.Parent = playerGui
+
+    createCorner(12).Parent = notification
+    createGlow(notification, notification.BackgroundColor3, 25)
+
+    local icon = Instance.new("TextLabel")
+    icon.Text = type == "success" and "✓" or type == "error" and "✗" or "ℹ"
+    icon.Size = UDim2.new(0, 50, 1, 0)
+    icon.BackgroundTransparency = 1
+    icon.TextColor3 = COLORS.TEXT
+    icon.Font = Enum.Font.GothamBold
+    icon.TextSize = 24
+    icon.Parent = notification
+
+    local text = Instance.new("TextLabel")
+    text.Text = message
+    text.Size = UDim2.new(1, -60, 1, 0)
+    text.Position = UDim2.new(0, 50, 0, 0)
+    text.BackgroundTransparency = 1
+    text.TextColor3 = COLORS.TEXT
+    text.Font = Enum.Font.GothamSemibold
+    text.TextSize = 14
+    text.TextWrapped = true
+    text.TextXAlignment = Enum.TextXAlignment.Left
+    text.Parent = notification
+
+    -- Animate in
+    notification.Position = UDim2.new(1, 0, 0, 20)
+    TweenService:Create(notification, TweenInfo.new(0.5, Enum.EasingStyle.Back), {Position = UDim2.new(1, -370, 0, 20)}):Play()
+
+    -- Auto remove
+    task.delay(duration or 3, function()
+        TweenService:Create(notification, TweenInfo.new(0.3), {Position = UDim2.new(1, 0, 0, 20)}):Play()
+        task.delay(0.3, function()
+            notification:Destroy()
+        end)
+    end)
+end
+
+-- Enhanced kick function for script users only
+local function kickScriptUser(userId, reason)
+    local userData = connectedUsers[userId]
+    if userData then
+        -- First try to kick from game if they're still connected
+        local targetPlayer = Players:GetPlayerByUserId(tonumber(userId))
+        if targetPlayer then
+            targetPlayer:Kick(reason or "You have been kicked by an administrator for script misuse")
+        end
+        -- Remove from script system
+        connectedUsers[userId] = nil
+        return true, userData.name
+    end
+    return false, "User not found in script system"
+end
+
+-- Function to save login for suggestions
+local function saveLoginSuggestion(username, password)
+    previousLogins[player.UserId] = {
+        username = username,
+        timestamp = tick()
+    }
+    -- Also save credentials for quick login (in real implementation, this should be encrypted)
+    rememberedCredentials[player.UserId] = {
+        username = username,
+        password = password,
+        timestamp = tick()
+    }
+end
+
+-- Function to get login suggestions
+local function getLoginSuggestion()
+    local suggestion = previousLogins[player.UserId]
+    if suggestion and (tick() - suggestion.timestamp) < 86400 then -- 24 hours
+        return suggestion.username
+    end
+    return nil
+end
+
+-- ===== MAIN GUI CONTAINER =====
+local mainGui = Instance.new("ScreenGui")
+mainGui.Name = "ZonanraSystem"
+mainGui.ResetOnSpawn = false
+mainGui.Parent = playerGui
+
+-- ===== PREMIUM LOGIN INTERFACE =====
+local loginContainer = Instance.new("Frame")
+loginContainer.Size = UDim2.new(1, 0, 1, 0)
+loginContainer.BackgroundTransparency = 1 -- Made transparent to remove black screen
+loginContainer.BorderSizePixel = 0
+loginContainer.Visible = true
+loginContainer.Parent = mainGui
+
+-- Login card
+local loginCard = Instance.new("Frame")
+loginCard.Size = isMobile and UDim2.new(0.9, 0, 0, 600) or UDim2.new(0, 450, 0, 600)
+loginCard.Position = UDim2.new(0.5, 0, 0.5, 0)
+loginCard.AnchorPoint = Vector2.new(0.5, 0.5)
+loginCard.BackgroundColor3 = COLORS.SURFACE
+loginCard.BorderSizePixel = 0
+loginCard.Parent = loginContainer
+
+createCorner(24).Parent = loginCard
+createStroke(COLORS.PANEL, 2).Parent = loginCard
+createGlow(loginCard, COLORS.PRIMARY, 50)
+
+-- Logo section
+local logoSection = Instance.new("Frame")
+logoSection.Size = UDim2.new(1, 0, 0, 120)
+logoSection.BackgroundColor3 = COLORS.PRIMARY
+logoSection.BorderSizePixel = 0
+logoSection.Parent = loginCard
+
+createCorner(24).Parent = logoSection
+
+local logoFix = Instance.new("Frame")
+logoFix.Size = UDim2.new(1, 0, 0, 24)
+logoFix.Position = UDim2.new(0, 0, 1, -24)
+logoFix.BackgroundColor3 = COLORS.PRIMARY
+logoFix.BorderSizePixel = 0
+logoFix.Parent = logoSection
+
+local logoGradient = Instance.new("UIGradient")
+logoGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, COLORS.PRIMARY),
+    ColorSequenceKeypoint.new(1, COLORS.ACCENT)
+}
+logoGradient.Rotation = 45
+logoGradient.Parent = logoSection
+
+local logo = Instance.new("TextLabel")
+logo.Text = "ZONANRA"
+logo.Size = UDim2.new(1, 0, 0, 60)
+logo.Position = UDim2.new(0, 0, 0, 20)
+logo.BackgroundTransparency = 1
+logo.TextColor3 = COLORS.TEXT
+logo.Font = Enum.Font.GothamBlack
+logo.TextSize = isMobile and 32 or 42
+logo.Parent = logoSection
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Text = "Premium Game Enhancement Suite"
+subtitle.Size = UDim2.new(1, 0, 0, 30)
+subtitle.Position = UDim2.new(0, 0, 0, 75)
+subtitle.BackgroundTransparency = 1
+subtitle.TextColor3 = Color3.fromRGB(200, 220, 255)
+subtitle.Font = Enum.Font.GothamSemibold
+subtitle.TextSize = 14
+subtitle.Parent = logoSection
+
+-- Login suggestion section
+local suggestionSection = Instance.new("Frame")
+suggestionSection.Size = UDim2.new(1, -60, 0, 80)
+suggestionSection.Position = UDim2.new(0, 30, 0, 140)
+suggestionSection.BackgroundColor3 = COLORS.PANEL
+suggestionSection.BorderSizePixel = 0
+suggestionSection.Visible = false
+suggestionSection.Parent = loginCard
+
+createCorner(12).Parent = suggestionSection
+
+local suggestionTitle = Instance.new("TextLabel")
+suggestionTitle.Text = "Welcome back!"
+suggestionTitle.Size = UDim2.new(1, 0, 0, 25)
+suggestionTitle.Position = UDim2.new(0, 15, 0, 5)
+suggestionTitle.BackgroundTransparency = 1
+suggestionTitle.TextColor3 = COLORS.TEXT
+suggestionTitle.Font = Enum.Font.GothamBold
+suggestionTitle.TextSize = 14
+suggestionTitle.TextXAlignment = Enum.TextXAlignment.Left
+suggestionTitle.Parent = suggestionSection
+
+local suggestionText = Instance.new("TextLabel")
+suggestionText.Text = "Continue with previous account or create new?"
+suggestionText.Size = UDim2.new(1, 0, 0, 20)
+suggestionText.Position = UDim2.new(0, 15, 0, 25)
+suggestionText.BackgroundTransparency = 1
+suggestionText.TextColor3 = COLORS.MUTED
+suggestionText.Font = Enum.Font.Gotham
+suggestionText.TextSize = 12
+suggestionText.TextXAlignment = Enum.TextXAlignment.Left
+suggestionText.Parent = suggestionSection
+
+local continueBtn = createButton("CONTINUE", UDim2.new(0, 100, 0, 25), UDim2.new(0, 15, 0, 50), COLORS.SUCCESS, suggestionSection, 12)
+local newAccountBtn = createButton("NEW ACCOUNT", UDim2.new(0, 120, 0, 25), UDim2.new(0, 125, 0, 50), COLORS.WARNING, suggestionSection, 12)
+
+-- Tab system
+local tabContainer = Instance.new("Frame")
+tabContainer.Size = UDim2.new(1, -60, 0, 50)
+tabContainer.Position = UDim2.new(0, 30, 0, 240)
+tabContainer.BackgroundColor3 = COLORS.PANEL
+tabContainer.BorderSizePixel = 0
+tabContainer.Parent = loginCard
+
+createCorner(12).Parent = tabContainer
+
+local loginTab = createButton("LOGIN", UDim2.new(0.5, -2, 1, -6), UDim2.new(0, 3, 0, 3), COLORS.PRIMARY, tabContainer)
+local signupTab = createButton("REGISTER", UDim2.new(0.5, -2, 1, -6), UDim2.new(0.5, 1, 0, 3), COLORS.PANEL, tabContainer)
+
+-- Login form
+local loginForm = Instance.new("Frame")
+loginForm.Size = UDim2.new(1, -60, 1, -320)
+loginForm.Position = UDim2.new(0, 30, 0, 310)
+loginForm.BackgroundTransparency = 1
+loginForm.Visible = true
+loginForm.Parent = loginCard
+
+local usernameInput = createInput("Username", UDim2.new(1, 0, 0, 70), UDim2.new(0, 0, 0, 0), loginForm)
+local passwordInput, getPassword = createInput("Password", UDim2.new(1, 0, 0, 70), UDim2.new(0, 0, 0, 90), loginForm, true)
+
+local loginBtn = createButton("LOGIN TO ZONANRA", UDim2.new(1, 0, 0, 50), UDim2.new(0, 0, 0, 180), COLORS.PRIMARY, loginForm, 18)
+
+-- Register form
+local registerForm = Instance.new("Frame")
+registerForm.Size = UDim2.new(1, -60, 1, -320)
+registerForm.Position = UDim2.new(0, 30, 0, 310)
+registerForm.BackgroundTransparency = 1
+registerForm.Visible = false
+registerForm.Parent = loginCard
+
+local newUsernameInput = createInput("Username", UDim2.new(1, 0, 0, 70), UDim2.new(0, 0, 0, 0), registerForm)
+local newPasswordInput, getNewPassword = createInput("Password", UDim2.new(1, 0, 0, 70), UDim2.new(0, 0, 0, 80), registerForm, true)
+local confirmPasswordInput, getConfirmPassword = createInput("Confirm Password", UDim2.new(1, 0, 0, 70), UDim2.new(0, 0, 0, 160), registerForm, true)
+
+local registerBtn = createButton("CREATE ACCOUNT", UDim2.new(1, 0, 0, 50), UDim2.new(0, 0, 0, 240), COLORS.SUCCESS, registerForm, 18)
+
+-- Check for login suggestions on startup
+local suggestedUsername = getLoginSuggestion()
+if suggestedUsername then
+    suggestionSection.Visible = true
+    suggestionText.Text = "Continue as " .. suggestedUsername .. " or create new account?"
+    tabContainer.Position = UDim2.new(0, 30, 0, 240)
+    loginForm.Position = UDim2.new(0, 30, 0, 310)
+    registerForm.Position = UDim2.new(0, 30, 0, 310)
+else
+    tabContainer.Position = UDim2.new(0, 30, 0, 140)
+    loginForm.Position = UDim2.new(0, 30, 0, 210)
+    registerForm.Position = UDim2.new(0, 30, 0, 210)
+end
+
+-- ===== USER DASHBOARD =====
+local userDashboard = Instance.new("Frame")
+userDashboard.Size = UDim2.new(1, 0, 1, 0)
+userDashboard.BackgroundTransparency = 1 -- Made transparent
+userDashboard.BorderSizePixel = 0
+userDashboard.Visible = false
+userDashboard.Parent = mainGui
+
+local dashboardFrame = Instance.new("Frame")
+dashboardFrame.Size = isMobile and UDim2.new(0.95, 0, 0.9, 0) or UDim2.new(0, 800, 0, 600)
+dashboardFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+dashboardFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+dashboardFrame.BackgroundColor3 = COLORS.SURFACE
+dashboardFrame.BorderSizePixel = 0
+dashboardFrame.Parent = userDashboard
+
+createCorner(20).Parent = dashboardFrame
+createStroke(COLORS.PANEL, 2).Parent = dashboardFrame
+
+-- Dashboard header
+local dashHeader = Instance.new("Frame")
+dashHeader.Size = UDim2.new(1, 0, 0, 80)
+dashHeader.BackgroundColor3 = COLORS.PANEL
+dashHeader.BorderSizePixel = 0
+dashHeader.Parent = dashboardFrame
+
+createCorner(20).Parent = dashHeader
+
+local dashHeaderFix = Instance.new("Frame")
+dashHeaderFix.Size = UDim2.new(1, 0, 0, 20)
+dashHeaderFix.Position = UDim2.new(0, 0, 1, -20)
+dashHeaderFix.BackgroundColor3 = COLORS.PANEL
+dashHeaderFix.BorderSizePixel = 0
+dashHeaderFix.Parent = dashHeader
+
+makeDraggable(dashboardFrame, dashHeader)
+
+local dashTitle = Instance.new("TextLabel")
+dashTitle.Text = "ZONANRA DASHBOARD"
+dashTitle.Size = UDim2.new(0.6, 0, 1, 0)
+dashTitle.Position = UDim2.new(0, 20, 0, 0)
+dashTitle.BackgroundTransparency = 1
+dashTitle.TextColor3 = COLORS.TEXT
+dashTitle.Font = Enum.Font.GothamBlack
+dashTitle.TextSize = isMobile and 18 or 22
+dashTitle.TextXAlignment = Enum.TextXAlignment.Left
+dashTitle.Parent = dashHeader
+
+local userInfo = Instance.new("Frame")
+userInfo.Size = UDim2.new(0, 200, 0, 50)
+userInfo.Position = UDim2.new(1, -220, 0, 15)
+userInfo.BackgroundColor3 = COLORS.BACKGROUND
+userInfo.BorderSizePixel = 0
+userInfo.Parent = dashHeader
+
+createCorner(12).Parent = userInfo
+
+local userAvatar = Instance.new("ImageLabel")
+userAvatar.Size = UDim2.new(0, 40, 0, 40)
+userAvatar.Position = UDim2.new(0, 5, 0, 5)
+userAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId="..player.UserId.."&width=150&height=150&format=png"
+userAvatar.BackgroundTransparency = 1
+userAvatar.Parent = userInfo
+
+createCorner(8).Parent = userAvatar
+
+local userName = Instance.new("TextLabel")
+userName.Text = player.Name
+userName.Size = UDim2.new(0, 100, 0, 40)
+userName.Position = UDim2.new(0, 50, 0, 5)
+userName.BackgroundTransparency = 1
+userName.TextColor3 = COLORS.TEXT
+userName.Font = Enum.Font.GothamSemibold
+userName.TextSize = 14
+userName.TextXAlignment = Enum.TextXAlignment.Left
+userName.Parent = userInfo
+
+local logoutBtn = createButton("LOGOUT", UDim2.new(0, 70, 0, 30), UDim2.new(1, -75, 0, 10), COLORS.DANGER, userInfo, 12)
+
+-- Dashboard content
+local dashContent = Instance.new("Frame")
+dashContent.Size = UDim2.new(1, -40, 1, -120)
+dashContent.Position = UDim2.new(0, 20, 0, 100)
+dashContent.BackgroundTransparency = 1
+dashContent.Parent = dashboardFrame
+
+-- Welcome message
+local welcomeMsg = Instance.new("TextLabel")
+welcomeMsg.Text = "Welcome to zonanra"
+welcomeMsg.Size = UDim2.new(1, 0, 0, 50)
+welcomeMsg.Position = UDim2.new(0, 0, 0, 0)
+welcomeMsg.BackgroundTransparency = 1
+welcomeMsg.TextColor3 = COLORS.PRIMARY
+welcomeMsg.Font = Enum.Font.GothamBold
+welcomeMsg.TextSize = isMobile and 20 or 28
+welcomeMsg.Parent = dashContent
+
+-- Feature grid
+local featureGrid = Instance.new("ScrollingFrame")
+featureGrid.Size = UDim2.new(1, 0, 1, -70)
+featureGrid.Position = UDim2.new(0, 0, 0, 70)
+featureGrid.BackgroundTransparency = 1
+featureGrid.ScrollBarThickness = 8
+featureGrid.ScrollBarImageColor3 = COLORS.PRIMARY
+featureGrid.CanvasSize = UDim2.new(0, 0, 0, 800)
+featureGrid.Parent = dashContent
+
+-- Features for regular users
+local userFeatures = {
+    {name = "Aimlock", desc = "Advanced targeting system", icon = "🎯", func = function()
+        userStates.aimlock = not userStates.aimlock
+        if userStates.aimlock then
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/new-gugus/aimbot-neptune/refs/heads/main/aimbot.lua", true))()
+            showNotification("Aimlock activated", "success")
+            -- Update user status for admin monitoring
+            if connectedUsers[tostring(player.UserId)] then
+                connectedUsers[tostring(player.UserId)].status = "Using Aimlock"
             end
-            
-            for _, v in pairs(character:GetDescendants()) do
-                if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then
-                    v:Destroy()
+        else
+            showNotification("Aimlock deactivated", "info")
+            if connectedUsers[tostring(player.UserId)] then
+                connectedUsers[tostring(player.UserId)].status = "Online"
+            end
+        end
+    end},
+    {name = "God Mode", desc = "Infinite health protection", icon = "🛡️", func = function()
+        userStates.godMode = not userStates.godMode
+        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            if userStates.godMode then
+                humanoid.MaxHealth = math.huge
+                humanoid.Health = math.huge
+                showNotification("God Mode enabled", "success")
+                if connectedUsers[tostring(player.UserId)] then
+                    connectedUsers[tostring(player.UserId)].status = "Using God Mode"
+                end
+            else
+                humanoid.MaxHealth = 100
+                humanoid.Health = 100
+                showNotification("God Mode disabled", "info")
+                if connectedUsers[tostring(player.UserId)] then
+                    connectedUsers[tostring(player.UserId)].status = "Online"
                 end
             end
         end
-    end
-end)
+    end},
+    {name = "Fly Mode", desc = "WASD flying controls", icon = "🚀", func = function()
+        userStates.flying = not userStates.flying
+        local character = player.Character
+        if not character then return end
 
--- Noclip Toggle
-noclipButton.MouseButton1Click:Connect(function()
-    noclip = not noclip
-    if noclip then
-        noclipButton.BackgroundColor3 = Color3.fromRGB(180, 80, 0)
-        
-        local character = player.Character or player.CharacterAdded:Wait()
-        local noclipConnection
-        noclipConnection = game:GetService("RunService").Stepped:Connect(function()
-            if not noclip or not character then
-                if noclipConnection then noclipConnection:Disconnect() end
-                return
-            end
-            
-            for _, part in pairs(character:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
+        if userStates.flying then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if humanoid and rootPart then
+                local bodyVelocity = Instance.new("BodyVelocity")
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+                bodyVelocity.Parent = rootPart
+
+                local speed = 50
+                local connection
+                connection = RunService.Heartbeat:Connect(function()
+                    if not userStates.flying then
+                        connection:Disconnect()
+                        if bodyVelocity then bodyVelocity:Destroy() end
+                        return
+                    end
+
+                    local cam = workspace.CurrentCamera
+                    local moveDirection = Vector3.new(0, 0, 0)
+
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                        moveDirection = moveDirection + cam.CFrame.LookVector
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                        moveDirection = moveDirection - cam.CFrame.LookVector
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                        moveDirection = moveDirection - cam.CFrame.RightVector
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                        moveDirection = moveDirection + cam.CFrame.RightVector
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                        moveDirection = moveDirection + Vector3.new(0, 1, 0)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                        moveDirection = moveDirection - Vector3.new(0, 1, 0)
+                    end
+
+                    if bodyVelocity then
+                        bodyVelocity.Velocity = moveDirection * speed
+                    end
+                end)
+                showNotification("Fly Mode enabled - Use WASD + Space/Shift", "success")
+                if connectedUsers[tostring(player.UserId)] then
+                    connectedUsers[tostring(player.UserId)].status = "Using Fly Mode"
                 end
             end
-        end)
-    else
-        noclipButton.BackgroundColor3 = Color3.fromRGB(215, 120, 0)
-        
+        else
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                for _, obj in pairs(rootPart:GetChildren()) do
+                    if obj:IsA("BodyVelocity") then
+                        obj:Destroy()
+                    end
+                end
+            end
+            showNotification("Fly Mode disabled", "info")
+            if connectedUsers[tostring(player.UserId)] then
+                connectedUsers[tostring(player.UserId)].status = "Online"
+            end
+        end
+    end},
+    {name = "Noclip", desc = "Walk through walls", icon = "👻", func = function()
+        userStates.noclip = not userStates.noclip
         local character = player.Character
-        if character then
+        if not character then return end
+
+        if userStates.noclip then
+            local connection
+            connection = RunService.Stepped:Connect(function()
+                if not userStates.noclip then
+                    connection:Disconnect()
+                    return
+                end
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end)
+            showNotification("Noclip enabled", "success")
+            if connectedUsers[tostring(player.UserId)] then
+                connectedUsers[tostring(player.UserId)].status = "Using Noclip"
+            end
+        else
             for _, part in pairs(character:GetDescendants()) do
-                if part:IsA("BasePart") then
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
                     part.CanCollide = true
                 end
             end
+            showNotification("Noclip disabled", "info")
+            if connectedUsers[tostring(player.UserId)] then
+                connectedUsers[tostring(player.UserId)].status = "Online"
+            end
+        end
+    end},
+    {name = "Speed Boost", desc = "Enhanced movement speed", icon = "💨", func = function()
+        userStates.speedBoost = not userStates.speedBoost
+        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            if userStates.speedBoost then
+                humanoid.WalkSpeed = 100
+                showNotification("Speed Boost enabled", "success")
+                if connectedUsers[tostring(player.UserId)] then
+                    connectedUsers[tostring(player.UserId)].status = "Using Speed Boost"
+                end
+            else
+                humanoid.WalkSpeed = 16
+                showNotification("Speed Boost disabled", "info")
+                if connectedUsers[tostring(player.UserId)] then
+                    connectedUsers[tostring(player.UserId)].status = "Online"
+                end
+            end
+        end
+    end},
+    {name = "Jump Boost", desc = "Enhanced jump power", icon = "⬆️", func = function()
+        userStates.jumpBoost = not userStates.jumpBoost
+        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            if userStates.jumpBoost then
+                humanoid.JumpPower = 150
+                showNotification("Jump Boost enabled", "success")
+                if connectedUsers[tostring(player.UserId)] then
+                    connectedUsers[tostring(player.UserId)].status = "Using Jump Boost"
+                end
+            else
+                humanoid.JumpPower = 50
+                showNotification("Jump Boost disabled", "info")
+                if connectedUsers[tostring(player.UserId)] then
+                    connectedUsers[tostring(player.UserId)].status = "Online"
+                end
+            end
+        end
+    end}
+}
+
+-- Create feature cards
+local currentY = 20
+for i, feature in pairs(userFeatures) do
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, -20, 0, 100)
+    card.Position = UDim2.new(0, 10, 0, currentY)
+    card.BackgroundColor3 = COLORS.PANEL
+    card.BorderSizePixel = 0
+    card.Parent = featureGrid
+
+    createCorner(16).Parent = card
+    createStroke(COLORS.BACKGROUND, 1).Parent = card
+
+    local icon = Instance.new("TextLabel")
+    icon.Text = feature.icon
+    icon.Size = UDim2.new(0, 60, 0, 60)
+    icon.Position = UDim2.new(0, 20, 0, 20)
+    icon.BackgroundColor3 = COLORS.BACKGROUND
+    icon.TextColor3 = COLORS.TEXT
+    icon.Font = Enum.Font.GothamBold
+    icon.TextSize = 28
+    icon.BorderSizePixel = 0
+    icon.Parent = card
+
+    createCorner(12).Parent = icon
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Text = feature.name
+    nameLabel.Size = UDim2.new(0, 200, 0, 30)
+    nameLabel.Position = UDim2.new(0, 100, 0, 15)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = COLORS.TEXT
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 18
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.Parent = card
+
+    local descLabel = Instance.new("TextLabel")
+    descLabel.Text = feature.desc
+    descLabel.Size = UDim2.new(0, 200, 0, 25)
+    descLabel.Position = UDim2.new(0, 100, 0, 45)
+    descLabel.BackgroundTransparency = 1
+    descLabel.TextColor3 = COLORS.MUTED
+    descLabel.Font = Enum.Font.Gotham
+    descLabel.TextSize = 14
+    descLabel.TextXAlignment = Enum.TextXAlignment.Left
+    descLabel.Parent = card
+
+    local toggleBtn = createButton("TOGGLE", UDim2.new(0, 100, 0, 40), UDim2.new(1, -120, 0, 30), COLORS.PRIMARY, card, 14)
+    toggleBtn.MouseButton1Click:Connect(feature.func)
+
+    currentY = currentY + 120
+end
+
+-- ===== ADMIN PANEL =====
+local adminPanel = Instance.new("Frame")
+adminPanel.Size = UDim2.new(1, 0, 1, 0)
+adminPanel.BackgroundTransparency = 1 -- Made transparent
+adminPanel.BorderSizePixel = 0
+adminPanel.Visible = false
+adminPanel.Parent = mainGui
+
+local adminFrame = Instance.new("Frame")
+adminFrame.Size = isMobile and UDim2.new(0.95, 0, 0.9, 0) or UDim2.new(0, 1000, 0, 700)
+adminFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+adminFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+adminFrame.BackgroundColor3 = COLORS.SURFACE
+adminFrame.BorderSizePixel = 0
+adminFrame.Parent = adminPanel
+
+createCorner(20).Parent = adminFrame
+createStroke(COLORS.DANGER, 2).Parent = adminFrame
+
+-- Admin header
+local adminHeader = Instance.new("Frame")
+adminHeader.Size = UDim2.new(1, 0, 0, 80)
+adminHeader.BackgroundColor3 = COLORS.DANGER
+adminHeader.BorderSizePixel = 0
+adminHeader.Parent = adminFrame
+
+createCorner(20).Parent = adminHeader
+
+local adminHeaderFix = Instance.new("Frame")
+adminHeaderFix.Size = UDim2.new(1, 0, 0, 20)
+adminHeaderFix.Position = UDim2.new(0, 0, 1, -20)
+adminHeaderFix.BackgroundColor3 = COLORS.DANGER
+adminHeaderFix.BorderSizePixel = 0
+adminHeaderFix.Parent = adminHeader
+
+makeDraggable(adminFrame, adminHeader)
+
+local adminTitle = Instance.new("TextLabel")
+adminTitle.Text = "⚡ ADMIN CONTROL PANEL"
+adminTitle.Size = UDim2.new(0.6, 0, 1, 0)
+adminTitle.Position = UDim2.new(0, 20, 0, 0)
+adminTitle.BackgroundTransparency = 1
+adminTitle.TextColor3 = COLORS.TEXT
+adminTitle.Font = Enum.Font.GothamBlack
+adminTitle.TextSize = isMobile and 18 or 24
+adminTitle.TextXAlignment = Enum.TextXAlignment.Left
+adminTitle.Parent = adminHeader
+
+local adminLogoutBtn = createButton("LOGOUT", UDim2.new(0, 80, 0, 40), UDim2.new(1, -100, 0, 20), COLORS.BACKGROUND, adminHeader, 14)
+
+-- Main admin container with sidebar
+local adminMainContainer = Instance.new("Frame")
+adminMainContainer.Size = UDim2.new(1, -40, 1, -120)
+adminMainContainer.Position = UDim2.new(0, 20, 0, 100)
+adminMainContainer.BackgroundTransparency = 1
+adminMainContainer.Parent = adminFrame
+
+-- Sidebar navigation
+local adminSidebar = Instance.new("Frame")
+adminSidebar.Size = UDim2.new(0, 200, 1, 0)
+adminSidebar.Position = UDim2.new(0, 0, 0, 0)
+adminSidebar.BackgroundColor3 = COLORS.PANEL
+adminSidebar.BorderSizePixel = 0
+adminSidebar.Parent = adminMainContainer
+
+createCorner(16).Parent = adminSidebar
+
+local sidebarTitle = Instance.new("TextLabel")
+sidebarTitle.Text = "NAVIGATION"
+sidebarTitle.Size = UDim2.new(1, -20, 0, 40)
+sidebarTitle.Position = UDim2.new(0, 10, 0, 10)
+sidebarTitle.BackgroundTransparency = 1
+sidebarTitle.TextColor3 = COLORS.MUTED
+sidebarTitle.Font = Enum.Font.GothamBold
+sidebarTitle.TextSize = 12
+sidebarTitle.TextXAlignment = Enum.TextXAlignment.Left
+sidebarTitle.Parent = adminSidebar
+
+-- Tab buttons
+local generalTabBtn = createButton("📋 General", UDim2.new(1, -20, 0, 45), UDim2.new(0, 10, 0, 60), COLORS.PRIMARY, adminSidebar, 14)
+local premiumTabBtn = createButton("⭐ Script Control", UDim2.new(1, -20, 0, 45), UDim2.new(0, 10, 0, 115), COLORS.BACKGROUND, adminSidebar, 14)
+
+-- Content area
+local adminContent = Instance.new("Frame")
+adminContent.Size = UDim2.new(1, -220, 1, 0)
+adminContent.Position = UDim2.new(0, 220, 0, 0)
+adminContent.BackgroundTransparency = 1
+adminContent.Parent = adminMainContainer
+
+-- General tab content (regular user features)
+local generalContent = Instance.new("Frame")
+generalContent.Size = UDim2.new(1, 0, 1, 0)
+generalContent.BackgroundTransparency = 1
+generalContent.Visible = true
+generalContent.Parent = adminContent
+
+local generalTitle = Instance.new("TextLabel")
+generalTitle.Text = "General Features"
+generalTitle.Size = UDim2.new(1, 0, 0, 50)
+generalTitle.BackgroundTransparency = 1
+generalTitle.TextColor3 = COLORS.TEXT
+generalTitle.Font = Enum.Font.GothamBlack
+generalTitle.TextSize = 24
+generalTitle.Parent = generalContent
+
+-- Feature grid for general content
+local generalGrid = Instance.new("ScrollingFrame")
+generalGrid.Size = UDim2.new(1, 0, 1, -60)
+generalGrid.Position = UDim2.new(0, 0, 0, 60)
+generalGrid.BackgroundTransparency = 1
+generalGrid.ScrollBarThickness = 8
+generalGrid.ScrollBarImageColor3 = COLORS.PRIMARY
+generalGrid.CanvasSize = UDim2.new(0, 0, 0, 800)
+generalGrid.Parent = generalContent
+
+-- Add general features to admin panel
+local generalY = 20
+for i, feature in pairs(userFeatures) do
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, -20, 0, 100)
+    card.Position = UDim2.new(0, 10, 0, generalY)
+    card.BackgroundColor3 = COLORS.PANEL
+    card.BorderSizePixel = 0
+    card.Parent = generalGrid
+
+    createCorner(16).Parent = card
+    createStroke(COLORS.BACKGROUND, 1).Parent = card
+
+    local icon = Instance.new("TextLabel")
+    icon.Text = feature.icon
+    icon.Size = UDim2.new(0, 60, 0, 60)
+    icon.Position = UDim2.new(0, 20, 0, 20)
+    icon.BackgroundColor3 = COLORS.BACKGROUND
+    icon.TextColor3 = COLORS.TEXT
+    icon.Font = Enum.Font.GothamBold
+    icon.TextSize = 28
+    icon.BorderSizePixel = 0
+    icon.Parent = card
+
+    createCorner(12).Parent = icon
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Text = feature.name
+    nameLabel.Size = UDim2.new(0, 200, 0, 30)
+    nameLabel.Position = UDim2.new(0, 100, 0, 15)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = COLORS.TEXT
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 18
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.Parent = card
+
+    local descLabel = Instance.new("TextLabel")
+    descLabel.Text = feature.desc
+    descLabel.Size = UDim2.new(0, 200, 0, 25)
+    descLabel.Position = UDim2.new(0, 100, 0, 45)
+    descLabel.BackgroundTransparency = 1
+    descLabel.TextColor3 = COLORS.MUTED
+    descLabel.Font = Enum.Font.Gotham
+    descLabel.TextSize = 14
+    descLabel.TextXAlignment = Enum.TextXAlignment.Left
+    descLabel.Parent = card
+
+    local toggleBtn = createButton("TOGGLE", UDim2.new(0, 100, 0, 40), UDim2.new(1, -120, 0, 30), COLORS.PRIMARY, card, 14)
+    toggleBtn.MouseButton1Click:Connect(feature.func)
+
+    generalY = generalY + 120
+end
+
+-- Script Control tab content
+local premiumContent = Instance.new("Frame")
+premiumContent.Size = UDim2.new(1, 0, 1, 0)
+premiumContent.BackgroundTransparency = 1
+premiumContent.Visible = false
+premiumContent.Parent = adminContent
+
+local premiumTitle = Instance.new("TextLabel")
+premiumTitle.Text = "Script User Management"
+premiumTitle.Size = UDim2.new(1, 0, 0, 50)
+premiumTitle.BackgroundTransparency = 1
+premiumTitle.TextColor3 = COLORS.DANGER
+premiumTitle.Font = Enum.Font.GothamBlack
+premiumTitle.TextSize = 24
+premiumTitle.Parent = premiumContent
+
+-- Connected users section
+local usersSection = Instance.new("Frame")
+usersSection.Size = UDim2.new(1, 0, 1, -70)
+usersSection.Position = UDim2.new(0, 0, 0, 60)
+usersSection.BackgroundColor3 = COLORS.PANEL
+usersSection.BorderSizePixel = 0
+usersSection.Parent = premiumContent
+
+createCorner(16).Parent = usersSection
+
+local usersTitle = Instance.new("TextLabel")
+usersTitle.Text = "🔨 Script User Moderation - Kick/Ban Script Abusers"
+usersTitle.Size = UDim2.new(1, 0, 0, 30)
+usersTitle.Position = UDim2.new(0, 20, 0, 10)
+usersTitle.BackgroundTransparency = 1
+usersTitle.TextColor3 = COLORS.TEXT
+usersTitle.Font = Enum.Font.GothamBold
+usersTitle.TextSize = 16
+usersTitle.TextXAlignment = Enum.TextXAlignment.Left
+usersTitle.Parent = usersSection
+
+local usersSubtitle = Instance.new("TextLabel")
+usersSubtitle.Text = "Only users connected to the script system are shown. Kick/ban those misusing features."
+usersSubtitle.Size = UDim2.new(1, 0, 0, 20)
+usersSubtitle.Position = UDim2.new(0, 20, 0, 35)
+usersSubtitle.BackgroundTransparency = 1
+usersSubtitle.TextColor3 = COLORS.MUTED
+usersSubtitle.Font = Enum.Font.Gotham
+usersSubtitle.TextSize = 12
+usersSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+usersSubtitle.Parent = usersSection
+
+local usersList = Instance.new("ScrollingFrame")
+usersList.Size = UDim2.new(1, -40, 1, -80)
+usersList.Position = UDim2.new(0, 20, 0, 65)
+usersList.BackgroundTransparency = 1
+usersList.ScrollBarThickness = 6
+usersList.ScrollBarImageColor3 = COLORS.DANGER
+usersList.CanvasSize = UDim2.new(0, 0, 0, 200)
+usersList.Parent = usersSection
+
+-- Tab switching functionality
+generalTabBtn.MouseButton1Click:Connect(function()
+    generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
+    premiumTabBtn.BackgroundColor3 = COLORS.BACKGROUND
+    generalContent.Visible = true
+    premiumContent.Visible = false
+end)
+
+premiumTabBtn.MouseButton1Click:Connect(function()
+    premiumTabBtn.BackgroundColor3 = COLORS.DANGER
+    generalTabBtn.BackgroundColor3 = COLORS.BACKGROUND
+    generalContent.Visible = false
+    premiumContent.Visible = true
+end)
+
+-- Function to update users list with enhanced kick functionality - ONLY SCRIPT USERS
+local function updateUsersList()
+    for _, child in pairs(usersList:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+
+    local yPos = 10
+    local scriptUserCount = 0
+    
+    -- Only show users who are connected to the script system
+    for userId, userData in pairs(connectedUsers) do
+        -- Skip current admin user
+        if userId ~= tostring(player.UserId) then
+            scriptUserCount = scriptUserCount + 1
+            
+            local userCard = Instance.new("Frame")
+            userCard.Size = UDim2.new(1, -20, 0, 90)
+            userCard.Position = UDim2.new(0, 10, 0, yPos)
+            userCard.BackgroundColor3 = COLORS.BACKGROUND
+            userCard.BorderSizePixel = 0
+            userCard.Parent = usersList
+
+            createCorner(12).Parent = userCard
+
+            local userAva = Instance.new("ImageLabel")
+            userAva.Size = UDim2.new(0, 50, 0, 50)
+            userAva.Position = UDim2.new(0, 15, 0, 15)
+            userAva.Image = "https://www.roblox.com/headshot-thumbnail/image?userId="..userId.."&width=150&height=150&format=png"
+            userAva.BackgroundTransparency = 1
+            userAva.Parent = userCard
+
+            createCorner(8).Parent = userAva
+
+            local userNameLabel = Instance.new("TextLabel")
+            userNameLabel.Text = userData.name .. " (Script User)"
+            userNameLabel.Size = UDim2.new(0, 250, 0, 25)
+            userNameLabel.Position = UDim2.new(0, 80, 0, 15)
+            userNameLabel.BackgroundTransparency = 1
+            userNameLabel.TextColor3 = COLORS.TEXT
+            userNameLabel.Font = Enum.Font.GothamBold
+            userNameLabel.TextSize = 16
+            userNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            userNameLabel.Parent = userCard
+
+            local statusLabel = Instance.new("TextLabel")
+            statusLabel.Text = "Activity: " .. userData.status
+            statusLabel.Size = UDim2.new(0, 250, 0, 20)
+            statusLabel.Position = UDim2.new(0, 80, 0, 40)
+            statusLabel.BackgroundTransparency = 1
+            statusLabel.TextColor3 = userData.status == "Online" and COLORS.SUCCESS or COLORS.WARNING
+            statusLabel.Font = Enum.Font.Gotham
+            statusLabel.TextSize = 12
+            statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+            statusLabel.Parent = userCard
+
+            local timeLabel = Instance.new("TextLabel")
+            timeLabel.Text = "Connected: " .. math.floor((tick() - userData.joinTime) / 60) .. "m ago"
+            timeLabel.Size = UDim2.new(0, 250, 0, 15)
+            timeLabel.Position = UDim2.new(0, 80, 0, 60)
+            timeLabel.BackgroundTransparency = 1
+            timeLabel.TextColor3 = COLORS.MUTED
+            timeLabel.Font = Enum.Font.Gotham
+            timeLabel.TextSize = 10
+            timeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            timeLabel.Parent = userCard
+
+            local kickBtn = createButton("KICK", UDim2.new(0, 70, 0, 30), UDim2.new(1, -150, 0, 10), COLORS.WARNING, userCard, 12)
+            local banBtn = createButton("BAN", UDim2.new(0, 70, 0, 30), UDim2.new(1, -70, 0, 10), COLORS.DANGER, userCard, 12)
+
+            kickBtn.MouseButton1Click:Connect(function()
+                local success, userName = kickScriptUser(userId, "You have been kicked for script misuse")
+                if success then
+                    showNotification("Kicked script user: " .. userName, "success")
+                else
+                    showNotification("Failed to kick user: " .. userName, "error")
+                end
+                updateUsersList()
+            end)
+
+            banBtn.MouseButton1Click:Connect(function()
+                local success, userName = kickScriptUser(userId, "You have been banned for script abuse")
+                if success then
+                    blacklistedUsers[userId] = true
+                    showNotification("Banned script user: " .. userName, "success")
+                else
+                    showNotification("Failed to ban user", "error")
+                end
+                updateUsersList()
+            end)
+
+            yPos = yPos + 100
+        end
+    end
+
+    -- Update title to show count
+    usersTitle.Text = "🔨 Script User Moderation (" .. scriptUserCount .. " users connected)"
+    
+    -- Show message if no script users
+    if scriptUserCount == 0 then
+        local noUsersLabel = Instance.new("TextLabel")
+        noUsersLabel.Name = "NoUsers"
+        noUsersLabel.Text = "No other script users connected.\nOnly users actively using the script system appear here."
+        noUsersLabel.Size = UDim2.new(1, -40, 0, 100)
+        noUsersLabel.Position = UDim2.new(0, 20, 0, yPos)
+        noUsersLabel.BackgroundTransparency = 1
+        noUsersLabel.TextColor3 = COLORS.MUTED
+        noUsersLabel.Font = Enum.Font.GothamSemibold
+        noUsersLabel.TextSize = 16
+        noUsersLabel.TextWrapped = true
+        noUsersLabel.Parent = usersList
+        yPos = yPos + 120
+    end
+
+    usersList.CanvasSize = UDim2.new(0, 0, 0, yPos + 20)
+end
+
+-- ===== EVENT HANDLERS =====
+
+-- Login suggestion handlers
+continueBtn.MouseButton1Click:Connect(function()
+    if suggestedUsername then
+        local credentials = rememberedCredentials[player.UserId]
+        if credentials and credentials.username == suggestedUsername and (tick() - credentials.timestamp) < 86400 then
+            -- Auto-login with remembered credentials
+            if blacklistedUsers[tostring(player.UserId)] then
+                showNotification("You have been blacklisted from using this script", "error")
+                return
+            end
+            
+            if accounts[credentials.username] and accounts[credentials.username].password == credentials.password then
+                loginContainer.Visible = false
+                
+                -- Add to connected users
+                connectedUsers[tostring(player.UserId)] = {
+                    name = player.Name,
+                    status = "Online",
+                    joinTime = tick()
+                }
+                
+                if accounts[credentials.username].isAdmin then
+                    adminPanel.Visible = true
+                    showNotification("Welcome back Admin " .. credentials.username, "success")
+                    updateUsersList()
+                    
+                    -- Set initial tab state
+                    generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
+                    premiumTabBtn.BackgroundColor3 = COLORS.BACKGROUND
+                    generalContent.Visible = true
+                    premiumContent.Visible = false
+                else
+                    userDashboard.Visible = true
+                    showNotification("Welcome back " .. credentials.username, "success")
+                end
+            else
+                showNotification("Credentials expired, please login manually", "error")
+                -- Fall back to manual login
+                usernameInput.Text = suggestedUsername
+                suggestionSection.Visible = false
+                tabContainer.Position = UDim2.new(0, 30, 0, 140)
+                loginForm.Position = UDim2.new(0, 30, 0, 210)
+                registerForm.Position = UDim2.new(0, 30, 0, 210)
+                passwordInput:CaptureFocus()
+            end
+        else
+            -- Manual login
+            usernameInput.Text = suggestedUsername
+            suggestionSection.Visible = false
+            tabContainer.Position = UDim2.new(0, 30, 0, 140)
+            loginForm.Position = UDim2.new(0, 30, 0, 210)
+            registerForm.Position = UDim2.new(0, 30, 0, 210)
+            passwordInput:CaptureFocus()
+            showNotification("Enter your password to continue as " .. suggestedUsername, "info", 3)
         end
     end
 end)
 
--- Sign Out Functionality
-signOutButton.MouseButton1Click:Connect(function()
-    adminPanel.Enabled = false
-    loginScreen.Enabled = true
-    usernameBox.Text = ""
-    passwordBox.Text = ""
-    realPassword = ""
-    
-    -- Reset character states
-    flying = false
-    noclip = false
-    
+newAccountBtn.MouseButton1Click:Connect(function()
+    suggestionSection.Visible = false
+    tabContainer.Position = UDim2.new(0, 30, 0, 140)
+    loginForm.Position = UDim2.new(0, 30, 0, 210)
+    registerForm.Position = UDim2.new(0, 30, 0, 210)
+    signupTab.BackgroundColor3 = COLORS.PRIMARY
+    loginTab.BackgroundColor3 = COLORS.PANEL
+    loginForm.Visible = false
+    registerForm.Visible = true
+end)
+
+-- Tab switching
+loginTab.MouseButton1Click:Connect(function()
+    loginTab.BackgroundColor3 = COLORS.PRIMARY
+    signupTab.BackgroundColor3 = COLORS.PANEL
+    loginForm.Visible = true
+    registerForm.Visible = false
+end)
+
+signupTab.MouseButton1Click:Connect(function()
+    signupTab.BackgroundColor3 = COLORS.PRIMARY
+    loginTab.BackgroundColor3 = COLORS.PANEL
+    loginForm.Visible = false
+    registerForm.Visible = true
+end)
+
+-- Login functionality
+loginBtn.MouseButton1Click:Connect(function()
+    local username = usernameInput.Text:gsub("%s+", "")
+    local password = getPassword()
+
+    if username == "" or password == "" then
+        showNotification("Please fill all fields", "error")
+        return
+    end
+
+    if blacklistedUsers[tostring(player.UserId)] then
+        showNotification("You have been blacklisted from using this script", "error")
+        return
+    end
+
+    if accounts[username] and accounts[username].password == password then
+        -- Save login for future suggestions
+        saveLoginSuggestion(username, password)
+        
+        loginContainer.Visible = false
+
+        -- Add to connected users
+        connectedUsers[tostring(player.UserId)] = {
+            name = player.Name,
+            status = "Online",
+            joinTime = tick()
+        }
+
+        if accounts[username].isAdmin then
+            adminPanel.Visible = true
+            showNotification("Welcome Admin " .. username, "success")
+            updateUsersList()
+
+            -- Set initial tab state
+            generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
+            premiumTabBtn.BackgroundColor3 = COLORS.BACKGROUND
+            generalContent.Visible = true
+            premiumContent.Visible = false
+        else
+            userDashboard.Visible = true
+            showNotification("Welcome " .. username, "success")
+
+            -- Welcome sequence for user
+            welcomeMsg.Text = "Welcome to zonanra"
+            task.delay(5, function()
+                welcomeMsg.Text = "Choose your enhancements"
+            end)
+        end
+    else
+        showNotification("Invalid credentials", "error")
+    end
+end)
+
+-- Register functionality
+registerBtn.MouseButton1Click:Connect(function()
+    local username = newUsernameInput.Text:gsub("%s+", "")
+    local password = getNewPassword()
+    local confirmPassword = getConfirmPassword()
+
+    if username == "" or password == "" or confirmPassword == "" then
+        showNotification("Please fill all fields", "error")
+        return
+    end
+
+    if #username < 4 then
+        showNotification("Username too short (min 4 chars)", "error")
+        return
+    end
+
+    if #password < 6 then
+        showNotification("Password too short (min 6 chars)", "error")
+        return
+    end
+
+    if password ~= confirmPassword then
+        showNotification("Passwords don't match", "error")
+        return
+    end
+
+    if accounts[username] then
+        showNotification("Username already taken", "error")
+        return
+    end
+
+    accounts[username] = {password = password, isAdmin = false}
+    showNotification("Account created successfully!", "success")
+
+    task.delay(2, function()
+        loginTab.BackgroundColor3 = COLORS.PRIMARY
+        signupTab.BackgroundColor3 = COLORS.PANEL
+        loginForm.Visible = true
+        registerForm.Visible = false
+        usernameInput.Text = username
+    end)
+end)
+
+-- Enhanced logout functionality with suggestions
+local function performLogout()
+    -- Reset all states
+    for key, _ in pairs(userStates) do
+        userStates[key] = false
+    end
+
+    -- Reset character
     local character = player.Character
     if character then
-        for _, v in pairs(character:GetDescendants()) do
-            if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then
-                v:Destroy()
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = 16
+            humanoid.JumpPower = 50
+            humanoid.MaxHealth = 100
+            humanoid.Health = 100
+        end
+
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            for _, obj in pairs(rootPart:GetChildren()) do
+                if obj:IsA("BodyVelocity") then
+                    obj:Destroy()
+                end
             end
         end
-        
+
         for _, part in pairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
                 part.CanCollide = true
             end
         end
-        
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
-            humanoid.WalkSpeed = 16
-            humanoid.JumpPower = 50
-        end
     end
-end)
 
--- Initialize character when spawned
-player.CharacterAdded:Connect(function(character)
-    updateCharacter()
+    -- Remove from connected users
+    connectedUsers[tostring(player.UserId)] = nil
+
+    -- Show login screen with suggestions
+    userDashboard.Visible = false
+    adminPanel.Visible = false
+    loginContainer.Visible = true
     
-    if flying then
-        -- Re-enable fly if it was active
-        task.delay(0.5, function()
-            if flying then
-                local humanoid = character:WaitForChild("Humanoid")
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-                
-                local bodyGyro = Instance.new("BodyGyro")
-                bodyGyro.P = 10000
-                bodyGyro.MaxTorque = Vector3.new(10000, 10000, 10000)
-                bodyGyro.CFrame = character.HumanoidRootPart.CFrame
-                bodyGyro.Parent = character.HumanoidRootPart
-                
-                local bodyVelocity = Instance.new("BodyVelocity")
-                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-                bodyVelocity.MaxForce = Vector3.new(10000, 10000, 10000)
-                bodyVelocity.Parent = character.HumanoidRootPart
-            end
-        end)
+    -- Clear inputs
+    usernameInput.Text = ""
+    passwordInput.Text = ""
+    newUsernameInput.Text = ""
+    newPasswordInput.Text = ""
+    confirmPasswordInput.Text = ""
+    
+    -- Check for login suggestions
+    local lastUsername = getLoginSuggestion()
+    if lastUsername then
+        suggestionSection.Visible = true
+        suggestionText.Text = "Continue as " .. lastUsername .. " or create new account?"
+        tabContainer.Position = UDim2.new(0, 30, 0, 240)
+        loginForm.Position = UDim2.new(0, 30, 0, 310)
+        registerForm.Position = UDim2.new(0, 30, 0, 310)
+    else
+        suggestionSection.Visible = false
+        tabContainer.Position = UDim2.new(0, 30, 0, 140)
+        loginForm.Position = UDim2.new(0, 30, 0, 210)
+        registerForm.Position = UDim2.new(0, 30, 0, 210)
     end
     
-    if noclip then
-        -- Re-enable noclip if it was active
-        for _, part in pairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-end)
-
--- Initial character setup
-if player.Character then
-    updateCharacter()
+    showNotification("Logged out successfully", "info")
 end
+
+-- Logout functionality
+logoutBtn.MouseButton1Click:Connect(performLogout)
+adminLogoutBtn.MouseButton1Click:Connect(performLogout)
