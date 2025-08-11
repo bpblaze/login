@@ -1,4 +1,4 @@
--- Premium Admin System with User Management - Improved Version
+-- Premium Admin System with User Management - Fixed Version
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -473,7 +473,7 @@ else
     registerForm.Position = UDim2.new(0, 30, 0, 210)
 end
 
--- ===== USER DASHBOARD =====
+-- ===== UNIFIED DASHBOARD FOR ALL USERS =====
 local userDashboard = Instance.new("Frame")
 userDashboard.Size = UDim2.new(1, 0, 1, 0)
 userDashboard.BackgroundTransparency = 1 -- Made transparent
@@ -482,7 +482,7 @@ userDashboard.Visible = false
 userDashboard.Parent = mainGui
 
 local dashboardFrame = Instance.new("Frame")
-dashboardFrame.Size = isMobile and UDim2.new(0.95, 0, 0.9, 0) or UDim2.new(0, 800, 0, 600)
+dashboardFrame.Size = isMobile and UDim2.new(0.95, 0, 0.9, 0) or UDim2.new(0, 1000, 0, 700)
 dashboardFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 dashboardFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 dashboardFrame.BackgroundColor3 = COLORS.SURFACE
@@ -552,33 +552,96 @@ userName.Parent = userInfo
 
 local logoutBtn = createButton("LOGOUT", UDim2.new(0, 70, 0, 30), UDim2.new(1, -75, 0, 10), COLORS.DANGER, userInfo, 12)
 
--- Dashboard content
+-- Main dashboard container with sidebar for ALL USERS
+local dashMainContainer = Instance.new("Frame")
+dashMainContainer.Size = UDim2.new(1, -40, 1, -120)
+dashMainContainer.Position = UDim2.new(0, 20, 0, 100)
+dashMainContainer.BackgroundTransparency = 1
+dashMainContainer.Parent = dashboardFrame
+
+-- Sidebar navigation for ALL USERS
+local dashSidebar = Instance.new("Frame")
+dashSidebar.Size = UDim2.new(0, 200, 1, 0)
+dashSidebar.Position = UDim2.new(0, 0, 0, 0)
+dashSidebar.BackgroundColor3 = COLORS.PANEL
+dashSidebar.BorderSizePixel = 0
+dashSidebar.Parent = dashMainContainer
+
+createCorner(16).Parent = dashSidebar
+
+local sidebarTitle = Instance.new("TextLabel")
+sidebarTitle.Text = "NAVIGATION"
+sidebarTitle.Size = UDim2.new(1, -20, 0, 40)
+sidebarTitle.Position = UDim2.new(0, 10, 0, 10)
+sidebarTitle.BackgroundTransparency = 1
+sidebarTitle.TextColor3 = COLORS.MUTED
+sidebarTitle.Font = Enum.Font.GothamBold
+sidebarTitle.TextSize = 12
+sidebarTitle.TextXAlignment = Enum.TextXAlignment.Left
+sidebarTitle.Parent = dashSidebar
+
+-- Tab buttons (will be different for admin vs regular users)
+local generalTabBtn = createButton("📋 General", UDim2.new(1, -20, 0, 45), UDim2.new(0, 10, 0, 60), COLORS.PRIMARY, dashSidebar, 14)
+local secondTabBtn = createButton("👑 Owners", UDim2.new(1, -20, 0, 45), UDim2.new(0, 10, 0, 115), COLORS.BACKGROUND, dashSidebar, 14)
+
+-- Content area
 local dashContent = Instance.new("Frame")
-dashContent.Size = UDim2.new(1, -40, 1, -120)
-dashContent.Position = UDim2.new(0, 20, 0, 100)
+dashContent.Size = UDim2.new(1, -220, 1, 0)
+dashContent.Position = UDim2.new(0, 220, 0, 0)
 dashContent.BackgroundTransparency = 1
-dashContent.Parent = dashboardFrame
+dashContent.Parent = dashMainContainer
 
--- Welcome message
-local welcomeMsg = Instance.new("TextLabel")
-welcomeMsg.Text = "Welcome to zonanra"
-welcomeMsg.Size = UDim2.new(1, 0, 0, 50)
-welcomeMsg.Position = UDim2.new(0, 0, 0, 0)
-welcomeMsg.BackgroundTransparency = 1
-welcomeMsg.TextColor3 = COLORS.PRIMARY
-welcomeMsg.Font = Enum.Font.GothamBold
-welcomeMsg.TextSize = isMobile and 20 or 28
-welcomeMsg.Parent = dashContent
+-- General tab content (user features)
+local generalContent = Instance.new("Frame")
+generalContent.Size = UDim2.new(1, 0, 1, 0)
+generalContent.BackgroundTransparency = 1
+generalContent.Visible = true
+generalContent.Parent = dashContent
 
--- Feature grid
-local featureGrid = Instance.new("ScrollingFrame")
-featureGrid.Size = UDim2.new(1, 0, 1, -70)
-featureGrid.Position = UDim2.new(0, 0, 0, 70)
-featureGrid.BackgroundTransparency = 1
-featureGrid.ScrollBarThickness = 8
-featureGrid.ScrollBarImageColor3 = COLORS.PRIMARY
-featureGrid.CanvasSize = UDim2.new(0, 0, 0, 800)
-featureGrid.Parent = dashContent
+local generalTitle = Instance.new("TextLabel")
+generalTitle.Text = "General Features"
+generalTitle.Size = UDim2.new(1, 0, 0, 50)
+generalTitle.BackgroundTransparency = 1
+generalTitle.TextColor3 = COLORS.TEXT
+generalTitle.Font = Enum.Font.GothamBlack
+generalTitle.TextSize = 24
+generalTitle.Parent = generalContent
+
+-- Feature grid for general content
+local generalGrid = Instance.new("ScrollingFrame")
+generalGrid.Size = UDim2.new(1, 0, 1, -60)
+generalGrid.Position = UDim2.new(0, 0, 0, 60)
+generalGrid.BackgroundTransparency = 1
+generalGrid.ScrollBarThickness = 8
+generalGrid.ScrollBarImageColor3 = COLORS.PRIMARY
+generalGrid.CanvasSize = UDim2.new(0, 0, 0, 800)
+generalGrid.Parent = generalContent
+
+-- Second tab content (Owners for regular users, Script Control for admins)
+local secondContent = Instance.new("Frame")
+secondContent.Size = UDim2.new(1, 0, 1, 0)
+secondContent.BackgroundTransparency = 1
+secondContent.Visible = false
+secondContent.Parent = dashContent
+
+-- Will be populated based on user type
+local secondTitle = Instance.new("TextLabel")
+secondTitle.Text = "Owners"
+secondTitle.Size = UDim2.new(1, 0, 0, 50)
+secondTitle.BackgroundTransparency = 1
+secondTitle.TextColor3 = COLORS.TEXT
+secondTitle.Font = Enum.Font.GothamBlack
+secondTitle.TextSize = 24
+secondTitle.Parent = secondContent
+
+local secondSection = Instance.new("Frame")
+secondSection.Size = UDim2.new(1, 0, 1, -70)
+secondSection.Position = UDim2.new(0, 0, 0, 60)
+secondSection.BackgroundColor3 = COLORS.PANEL
+secondSection.BorderSizePixel = 0
+secondSection.Parent = secondContent
+
+createCorner(16).Parent = secondSection
 
 -- Features for regular users
 local userFeatures = {
@@ -762,181 +825,12 @@ local userFeatures = {
     end}
 }
 
--- Create feature cards
+-- Create feature cards in general tab
 local currentY = 20
 for i, feature in pairs(userFeatures) do
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, -20, 0, 100)
     card.Position = UDim2.new(0, 10, 0, currentY)
-    card.BackgroundColor3 = COLORS.PANEL
-    card.BorderSizePixel = 0
-    card.Parent = featureGrid
-
-    createCorner(16).Parent = card
-    createStroke(COLORS.BACKGROUND, 1).Parent = card
-
-    local icon = Instance.new("TextLabel")
-    icon.Text = feature.icon
-    icon.Size = UDim2.new(0, 60, 0, 60)
-    icon.Position = UDim2.new(0, 20, 0, 20)
-    icon.BackgroundColor3 = COLORS.BACKGROUND
-    icon.TextColor3 = COLORS.TEXT
-    icon.Font = Enum.Font.GothamBold
-    icon.TextSize = 28
-    icon.BorderSizePixel = 0
-    icon.Parent = card
-
-    createCorner(12).Parent = icon
-
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Text = feature.name
-    nameLabel.Size = UDim2.new(0, 200, 0, 30)
-    nameLabel.Position = UDim2.new(0, 100, 0, 15)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.TextColor3 = COLORS.TEXT
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextSize = 18
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-    nameLabel.Parent = card
-
-    local descLabel = Instance.new("TextLabel")
-    descLabel.Text = feature.desc
-    descLabel.Size = UDim2.new(0, 200, 0, 25)
-    descLabel.Position = UDim2.new(0, 100, 0, 45)
-    descLabel.BackgroundTransparency = 1
-    descLabel.TextColor3 = COLORS.MUTED
-    descLabel.Font = Enum.Font.Gotham
-    descLabel.TextSize = 14
-    descLabel.TextXAlignment = Enum.TextXAlignment.Left
-    descLabel.Parent = card
-
-    local toggleBtn = createButton("TOGGLE", UDim2.new(0, 100, 0, 40), UDim2.new(1, -120, 0, 30), COLORS.PRIMARY, card, 14)
-    toggleBtn.MouseButton1Click:Connect(feature.func)
-
-    currentY = currentY + 120
-end
-
--- ===== ADMIN PANEL =====
-local adminPanel = Instance.new("Frame")
-adminPanel.Size = UDim2.new(1, 0, 1, 0)
-adminPanel.BackgroundTransparency = 1 -- Made transparent
-adminPanel.BorderSizePixel = 0
-adminPanel.Visible = false
-adminPanel.Parent = mainGui
-
-local adminFrame = Instance.new("Frame")
-adminFrame.Size = isMobile and UDim2.new(0.95, 0, 0.9, 0) or UDim2.new(0, 1000, 0, 700)
-adminFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-adminFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-adminFrame.BackgroundColor3 = COLORS.SURFACE
-adminFrame.BorderSizePixel = 0
-adminFrame.Parent = adminPanel
-
-createCorner(20).Parent = adminFrame
-createStroke(COLORS.DANGER, 2).Parent = adminFrame
-
--- Admin header
-local adminHeader = Instance.new("Frame")
-adminHeader.Size = UDim2.new(1, 0, 0, 80)
-adminHeader.BackgroundColor3 = COLORS.DANGER
-adminHeader.BorderSizePixel = 0
-adminHeader.Parent = adminFrame
-
-createCorner(20).Parent = adminHeader
-
-local adminHeaderFix = Instance.new("Frame")
-adminHeaderFix.Size = UDim2.new(1, 0, 0, 20)
-adminHeaderFix.Position = UDim2.new(0, 0, 1, -20)
-adminHeaderFix.BackgroundColor3 = COLORS.DANGER
-adminHeaderFix.BorderSizePixel = 0
-adminHeaderFix.Parent = adminHeader
-
-makeDraggable(adminFrame, adminHeader)
-
-local adminTitle = Instance.new("TextLabel")
-adminTitle.Text = "⚡ ADMIN CONTROL PANEL"
-adminTitle.Size = UDim2.new(0.6, 0, 1, 0)
-adminTitle.Position = UDim2.new(0, 20, 0, 0)
-adminTitle.BackgroundTransparency = 1
-adminTitle.TextColor3 = COLORS.TEXT
-adminTitle.Font = Enum.Font.GothamBlack
-adminTitle.TextSize = isMobile and 18 or 24
-adminTitle.TextXAlignment = Enum.TextXAlignment.Left
-adminTitle.Parent = adminHeader
-
-local adminLogoutBtn = createButton("LOGOUT", UDim2.new(0, 80, 0, 40), UDim2.new(1, -100, 0, 20), COLORS.BACKGROUND, adminHeader, 14)
-
--- Main admin container with sidebar
-local adminMainContainer = Instance.new("Frame")
-adminMainContainer.Size = UDim2.new(1, -40, 1, -120)
-adminMainContainer.Position = UDim2.new(0, 20, 0, 100)
-adminMainContainer.BackgroundTransparency = 1
-adminMainContainer.Parent = adminFrame
-
--- Sidebar navigation
-local adminSidebar = Instance.new("Frame")
-adminSidebar.Size = UDim2.new(0, 200, 1, 0)
-adminSidebar.Position = UDim2.new(0, 0, 0, 0)
-adminSidebar.BackgroundColor3 = COLORS.PANEL
-adminSidebar.BorderSizePixel = 0
-adminSidebar.Parent = adminMainContainer
-
-createCorner(16).Parent = adminSidebar
-
-local sidebarTitle = Instance.new("TextLabel")
-sidebarTitle.Text = "NAVIGATION"
-sidebarTitle.Size = UDim2.new(1, -20, 0, 40)
-sidebarTitle.Position = UDim2.new(0, 10, 0, 10)
-sidebarTitle.BackgroundTransparency = 1
-sidebarTitle.TextColor3 = COLORS.MUTED
-sidebarTitle.Font = Enum.Font.GothamBold
-sidebarTitle.TextSize = 12
-sidebarTitle.TextXAlignment = Enum.TextXAlignment.Left
-sidebarTitle.Parent = adminSidebar
-
--- Tab buttons
-local generalTabBtn = createButton("📋 General", UDim2.new(1, -20, 0, 45), UDim2.new(0, 10, 0, 60), COLORS.PRIMARY, adminSidebar, 14)
-local premiumTabBtn = createButton("⭐ Script Control", UDim2.new(1, -20, 0, 45), UDim2.new(0, 10, 0, 115), COLORS.BACKGROUND, adminSidebar, 14)
-
--- Content area
-local adminContent = Instance.new("Frame")
-adminContent.Size = UDim2.new(1, -220, 1, 0)
-adminContent.Position = UDim2.new(0, 220, 0, 0)
-adminContent.BackgroundTransparency = 1
-adminContent.Parent = adminMainContainer
-
--- General tab content (regular user features)
-local generalContent = Instance.new("Frame")
-generalContent.Size = UDim2.new(1, 0, 1, 0)
-generalContent.BackgroundTransparency = 1
-generalContent.Visible = true
-generalContent.Parent = adminContent
-
-local generalTitle = Instance.new("TextLabel")
-generalTitle.Text = "General Features"
-generalTitle.Size = UDim2.new(1, 0, 0, 50)
-generalTitle.BackgroundTransparency = 1
-generalTitle.TextColor3 = COLORS.TEXT
-generalTitle.Font = Enum.Font.GothamBlack
-generalTitle.TextSize = 24
-generalTitle.Parent = generalContent
-
--- Feature grid for general content
-local generalGrid = Instance.new("ScrollingFrame")
-generalGrid.Size = UDim2.new(1, 0, 1, -60)
-generalGrid.Position = UDim2.new(0, 0, 0, 60)
-generalGrid.BackgroundTransparency = 1
-generalGrid.ScrollBarThickness = 8
-generalGrid.ScrollBarImageColor3 = COLORS.PRIMARY
-generalGrid.CanvasSize = UDim2.new(0, 0, 0, 800)
-generalGrid.Parent = generalContent
-
--- Add general features to admin panel
-local generalY = 20
-for i, feature in pairs(userFeatures) do
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, -20, 0, 100)
-    card.Position = UDim2.new(0, 10, 0, generalY)
     card.BackgroundColor3 = COLORS.PANEL
     card.BorderSizePixel = 0
     card.Parent = generalGrid
@@ -982,83 +876,170 @@ for i, feature in pairs(userFeatures) do
     local toggleBtn = createButton("TOGGLE", UDim2.new(0, 100, 0, 40), UDim2.new(1, -120, 0, 30), COLORS.PRIMARY, card, 14)
     toggleBtn.MouseButton1Click:Connect(feature.func)
 
-    generalY = generalY + 120
+    currentY = currentY + 120
 end
 
--- Script Control tab content
-local premiumContent = Instance.new("Frame")
-premiumContent.Size = UDim2.new(1, 0, 1, 0)
-premiumContent.BackgroundTransparency = 1
-premiumContent.Visible = false
-premiumContent.Parent = adminContent
+-- Variables to store user type and update UI accordingly
+local currentUserIsAdmin = false
 
-local premiumTitle = Instance.new("TextLabel")
-premiumTitle.Text = "Script User Management"
-premiumTitle.Size = UDim2.new(1, 0, 0, 50)
-premiumTitle.BackgroundTransparency = 1
-premiumTitle.TextColor3 = COLORS.DANGER
-premiumTitle.Font = Enum.Font.GothamBlack
-premiumTitle.TextSize = 24
-premiumTitle.Parent = premiumContent
+-- Function to setup second tab based on user type
+local function setupSecondTab(isAdmin)
+    currentUserIsAdmin = isAdmin
+    
+    if isAdmin then
+        -- Admin gets Script Control
+        secondTabBtn.Text = "⚡ Script Control"
+        secondTitle.Text = "Script User Management"
+        secondTitle.TextColor3 = COLORS.DANGER
+        
+        -- Clear existing content
+        for _, child in pairs(secondSection:GetChildren()) do
+            if not child:IsA("UICorner") then
+                child:Destroy()
+            end
+        end
+        
+        local adminTitle = Instance.new("TextLabel")
+        adminTitle.Text = "🔨 Script User Moderation - Kick/Ban Script Abusers"
+        adminTitle.Size = UDim2.new(1, 0, 0, 30)
+        adminTitle.Position = UDim2.new(0, 20, 0, 10)
+        adminTitle.BackgroundTransparency = 1
+        adminTitle.TextColor3 = COLORS.TEXT
+        adminTitle.Font = Enum.Font.GothamBold
+        adminTitle.TextSize = 16
+        adminTitle.TextXAlignment = Enum.TextXAlignment.Left
+        adminTitle.Parent = secondSection
 
--- Connected users section
-local usersSection = Instance.new("Frame")
-usersSection.Size = UDim2.new(1, 0, 1, -70)
-usersSection.Position = UDim2.new(0, 0, 0, 60)
-usersSection.BackgroundColor3 = COLORS.PANEL
-usersSection.BorderSizePixel = 0
-usersSection.Parent = premiumContent
+        local adminSubtitle = Instance.new("TextLabel")
+        adminSubtitle.Text = "Only users connected to the script system are shown. Kick/ban those misusing features."
+        adminSubtitle.Size = UDim2.new(1, 0, 0, 20)
+        adminSubtitle.Position = UDim2.new(0, 20, 0, 35)
+        adminSubtitle.BackgroundTransparency = 1
+        adminSubtitle.TextColor3 = COLORS.MUTED
+        adminSubtitle.Font = Enum.Font.Gotham
+        adminSubtitle.TextSize = 12
+        adminSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+        adminSubtitle.Parent = secondSection
 
-createCorner(16).Parent = usersSection
+        local usersList = Instance.new("ScrollingFrame")
+        usersList.Name = "UsersList"
+        usersList.Size = UDim2.new(1, -40, 1, -80)
+        usersList.Position = UDim2.new(0, 20, 0, 65)
+        usersList.BackgroundTransparency = 1
+        usersList.ScrollBarThickness = 6
+        usersList.ScrollBarImageColor3 = COLORS.DANGER
+        usersList.CanvasSize = UDim2.new(0, 0, 0, 200)
+        usersList.Parent = secondSection
+        
+    else
+        -- Regular user gets Owners
+        secondTabBtn.Text = "👑 Owners"
+        secondTitle.Text = "Owners"
+        secondTitle.TextColor3 = COLORS.ACCENT
+        
+        -- Clear existing content
+        for _, child in pairs(secondSection:GetChildren()) do
+            if not child:IsA("UICorner") then
+                child:Destroy()
+            end
+        end
+        
+        local ownersTitle = Instance.new("TextLabel")
+        ownersTitle.Text = "👑 Script Owners"
+        ownersTitle.Size = UDim2.new(1, 0, 0, 30)
+        ownersTitle.Position = UDim2.new(0, 20, 0, 10)
+        ownersTitle.BackgroundTransparency = 1
+        ownersTitle.TextColor3 = COLORS.TEXT
+        ownersTitle.Font = Enum.Font.GothamBold
+        ownersTitle.TextSize = 16
+        ownersTitle.TextXAlignment = Enum.TextXAlignment.Left
+        ownersTitle.Parent = secondSection
 
-local usersTitle = Instance.new("TextLabel")
-usersTitle.Text = "🔨 Script User Moderation - Kick/Ban Script Abusers"
-usersTitle.Size = UDim2.new(1, 0, 0, 30)
-usersTitle.Position = UDim2.new(0, 20, 0, 10)
-usersTitle.BackgroundTransparency = 1
-usersTitle.TextColor3 = COLORS.TEXT
-usersTitle.Font = Enum.Font.GothamBold
-usersTitle.TextSize = 16
-usersTitle.TextXAlignment = Enum.TextXAlignment.Left
-usersTitle.Parent = usersSection
+        local ownersSubtitle = Instance.new("TextLabel")
+        ownersSubtitle.Text = "Meet the creators and owners of this premium script system."
+        ownersSubtitle.Size = UDim2.new(1, 0, 0, 20)
+        ownersSubtitle.Position = UDim2.new(0, 20, 0, 35)
+        ownersSubtitle.BackgroundTransparency = 1
+        ownersSubtitle.TextColor3 = COLORS.MUTED
+        ownersSubtitle.Font = Enum.Font.Gotham
+        ownersSubtitle.TextSize = 12
+        ownersSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+        ownersSubtitle.Parent = secondSection
 
-local usersSubtitle = Instance.new("TextLabel")
-usersSubtitle.Text = "Only users connected to the script system are shown. Kick/ban those misusing features."
-usersSubtitle.Size = UDim2.new(1, 0, 0, 20)
-usersSubtitle.Position = UDim2.new(0, 20, 0, 35)
-usersSubtitle.BackgroundTransparency = 1
-usersSubtitle.TextColor3 = COLORS.MUTED
-usersSubtitle.Font = Enum.Font.Gotham
-usersSubtitle.TextSize = 12
-usersSubtitle.TextXAlignment = Enum.TextXAlignment.Left
-usersSubtitle.Parent = usersSection
+        -- Noarkan owner card
+        local ownerCard = Instance.new("Frame")
+        ownerCard.Size = UDim2.new(1, -40, 0, 120)
+        ownerCard.Position = UDim2.new(0, 20, 0, 70)
+        ownerCard.BackgroundColor3 = COLORS.BACKGROUND
+        ownerCard.BorderSizePixel = 0
+        ownerCard.Parent = secondSection
 
-local usersList = Instance.new("ScrollingFrame")
-usersList.Size = UDim2.new(1, -40, 1, -80)
-usersList.Position = UDim2.new(0, 20, 0, 65)
-usersList.BackgroundTransparency = 1
-usersList.ScrollBarThickness = 6
-usersList.ScrollBarImageColor3 = COLORS.DANGER
-usersList.CanvasSize = UDim2.new(0, 0, 0, 200)
-usersList.Parent = usersSection
+        createCorner(16).Parent = ownerCard
+        createStroke(COLORS.ACCENT, 2).Parent = ownerCard
 
--- Tab switching functionality
-generalTabBtn.MouseButton1Click:Connect(function()
-    generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
-    premiumTabBtn.BackgroundColor3 = COLORS.BACKGROUND
-    generalContent.Visible = true
-    premiumContent.Visible = false
-end)
+        local ownerAvatar = Instance.new("ImageLabel")
+        ownerAvatar.Size = UDim2.new(0, 80, 0, 80)
+        ownerAvatar.Position = UDim2.new(0, 20, 0, 20)
+        ownerAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=1665348838&width=150&height=150&format=png"
+        ownerAvatar.BackgroundTransparency = 1
+        ownerAvatar.Parent = ownerCard
 
-premiumTabBtn.MouseButton1Click:Connect(function()
-    premiumTabBtn.BackgroundColor3 = COLORS.DANGER
-    generalTabBtn.BackgroundColor3 = COLORS.BACKGROUND
-    generalContent.Visible = false
-    premiumContent.Visible = true
-end)
+        createCorner(12).Parent = ownerAvatar
+        createGlow(ownerAvatar, COLORS.ACCENT, 20)
 
--- Function to update users list with enhanced kick functionality - ONLY SCRIPT USERS
+        local ownerName = Instance.new("TextLabel")
+        ownerName.Text = "Owner Noarkan"
+        ownerName.Size = UDim2.new(0, 300, 0, 35)
+        ownerName.Position = UDim2.new(0, 120, 0, 20)
+        ownerName.BackgroundTransparency = 1
+        ownerName.TextColor3 = COLORS.TEXT
+        ownerName.Font = Enum.Font.GothamBlack
+        ownerName.TextSize = 20
+        ownerName.TextXAlignment = Enum.TextXAlignment.Left
+        ownerName.Parent = ownerCard
+
+        local ownerRole = Instance.new("TextLabel")
+        ownerRole.Text = "Script Creator & Main Developer"
+        ownerRole.Size = UDim2.new(0, 300, 0, 25)
+        ownerRole.Position = UDim2.new(0, 120, 0, 50)
+        ownerRole.BackgroundTransparency = 1
+        ownerRole.TextColor3 = COLORS.ACCENT
+        ownerRole.Font = Enum.Font.GothamBold
+        ownerRole.TextSize = 14
+        ownerRole.TextXAlignment = Enum.TextXAlignment.Left
+        ownerRole.Parent = ownerCard
+
+        local ownerDesc = Instance.new("TextLabel")
+        ownerDesc.Text = "The mastermind behind this premium enhancement suite"
+        ownerDesc.Size = UDim2.new(0, 300, 0, 20)
+        ownerDesc.Position = UDim2.new(0, 120, 0, 75)
+        ownerDesc.BackgroundTransparency = 1
+        ownerDesc.TextColor3 = COLORS.MUTED
+        ownerDesc.Font = Enum.Font.Gotham
+        ownerDesc.TextSize = 12
+        ownerDesc.TextXAlignment = Enum.TextXAlignment.Left
+        ownerDesc.Parent = ownerCard
+
+        -- Crown decoration
+        local crown = Instance.new("TextLabel")
+        crown.Text = "👑"
+        crown.Size = UDim2.new(0, 30, 0, 30)
+        crown.Position = UDim2.new(1, -40, 0, 10)
+        crown.BackgroundTransparency = 1
+        crown.TextColor3 = COLORS.WARNING
+        crown.Font = Enum.Font.GothamBold
+        crown.TextSize = 24
+        crown.Parent = ownerCard
+    end
+end
+
+-- Function to update users list for admin (only called if user is admin)
 local function updateUsersList()
+    if not currentUserIsAdmin then return end
+    
+    local usersList = secondSection:FindFirstChild("UsersList")
+    if not usersList then return end
+    
     for _, child in pairs(usersList:GetChildren()) do
         if child:IsA("Frame") then
             child:Destroy()
@@ -1154,7 +1135,10 @@ local function updateUsersList()
     end
 
     -- Update title to show count
-    usersTitle.Text = "🔨 Script User Moderation (" .. scriptUserCount .. " users connected)"
+    local adminTitle = secondSection:FindFirstChild("TextLabel")
+    if adminTitle then
+        adminTitle.Text = "🔨 Script User Moderation (" .. scriptUserCount .. " users connected)"
+    end
     
     -- Show message if no script users
     if scriptUserCount == 0 then
@@ -1175,20 +1159,47 @@ local function updateUsersList()
     usersList.CanvasSize = UDim2.new(0, 0, 0, yPos + 20)
 end
 
+-- Tab switching functionality
+generalTabBtn.MouseButton1Click:Connect(function()
+    generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
+    secondTabBtn.BackgroundColor3 = COLORS.BACKGROUND
+    generalContent.Visible = true
+    secondContent.Visible = false
+end)
+
+secondTabBtn.MouseButton1Click:Connect(function()
+    if currentUserIsAdmin then
+        secondTabBtn.BackgroundColor3 = COLORS.DANGER
+    else
+        secondTabBtn.BackgroundColor3 = COLORS.ACCENT
+    end
+    generalTabBtn.BackgroundColor3 = COLORS.BACKGROUND
+    generalContent.Visible = false
+    secondContent.Visible = true
+    
+    -- Update users list if admin
+    if currentUserIsAdmin then
+        updateUsersList()
+    end
+end)
+
 -- ===== EVENT HANDLERS =====
 
--- Login suggestion handlers
+-- FIXED Login suggestion handlers
 continueBtn.MouseButton1Click:Connect(function()
+    local suggestedUsername = getLoginSuggestion()
     if suggestedUsername then
         local credentials = rememberedCredentials[player.UserId]
         if credentials and credentials.username == suggestedUsername and (tick() - credentials.timestamp) < 86400 then
-            -- Auto-login with remembered credentials
+            -- Check blacklist first
             if blacklistedUsers[tostring(player.UserId)] then
                 showNotification("You have been blacklisted from using this script", "error")
                 return
             end
             
+            -- Check if account still exists and password matches
             if accounts[credentials.username] and accounts[credentials.username].password == credentials.password then
+                -- Successful auto-login
                 loginContainer.Visible = false
                 
                 -- Add to connected users
@@ -1198,23 +1209,32 @@ continueBtn.MouseButton1Click:Connect(function()
                     joinTime = tick()
                 }
                 
+                -- Show unified dashboard for both admin and regular users
+                userDashboard.Visible = true
+                setupSecondTab(accounts[credentials.username].isAdmin)
+                
                 if accounts[credentials.username].isAdmin then
-                    adminPanel.Visible = true
                     showNotification("Welcome back Admin " .. credentials.username, "success")
+                    dashTitle.Text = "⚡ ADMIN CONTROL PANEL"
+                    dashHeader.BackgroundColor3 = COLORS.DANGER
+                    dashHeaderFix.BackgroundColor3 = COLORS.DANGER
                     updateUsersList()
-                    
-                    -- Set initial tab state
-                    generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
-                    premiumTabBtn.BackgroundColor3 = COLORS.BACKGROUND
-                    generalContent.Visible = true
-                    premiumContent.Visible = false
                 else
-                    userDashboard.Visible = true
                     showNotification("Welcome back " .. credentials.username, "success")
+                    dashTitle.Text = "ZONANRA DASHBOARD"
+                    dashHeader.BackgroundColor3 = COLORS.PANEL
+                    dashHeaderFix.BackgroundColor3 = COLORS.PANEL
                 end
+                
+                -- Set initial tab state
+                generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
+                secondTabBtn.BackgroundColor3 = COLORS.BACKGROUND
+                generalContent.Visible = true
+                secondContent.Visible = false
+                
             else
-                showNotification("Credentials expired, please login manually", "error")
-                -- Fall back to manual login
+                showNotification("Session expired, please login manually", "error")
+                -- Fall back to manual login with username filled
                 usernameInput.Text = suggestedUsername
                 suggestionSection.Visible = false
                 tabContainer.Position = UDim2.new(0, 30, 0, 140)
@@ -1223,7 +1243,7 @@ continueBtn.MouseButton1Click:Connect(function()
                 passwordInput:CaptureFocus()
             end
         else
-            -- Manual login
+            -- No valid stored credentials, fall back to manual login
             usernameInput.Text = suggestedUsername
             suggestionSection.Visible = false
             tabContainer.Position = UDim2.new(0, 30, 0, 140)
@@ -1232,6 +1252,8 @@ continueBtn.MouseButton1Click:Connect(function()
             passwordInput:CaptureFocus()
             showNotification("Enter your password to continue as " .. suggestedUsername, "info", 3)
         end
+    else
+        showNotification("No previous login found", "error")
     end
 end)
 
@@ -1261,7 +1283,7 @@ signupTab.MouseButton1Click:Connect(function()
     registerForm.Visible = true
 end)
 
--- Login functionality
+-- FIXED Login functionality
 loginBtn.MouseButton1Click:Connect(function()
     local username = usernameInput.Text:gsub("%s+", "")
     local password = getPassword()
@@ -1289,26 +1311,29 @@ loginBtn.MouseButton1Click:Connect(function()
             joinTime = tick()
         }
 
+        -- Show unified dashboard for both admin and regular users
+        userDashboard.Visible = true
+        setupSecondTab(accounts[username].isAdmin)
+
         if accounts[username].isAdmin then
-            adminPanel.Visible = true
             showNotification("Welcome Admin " .. username, "success")
+            dashTitle.Text = "⚡ ADMIN CONTROL PANEL"
+            dashHeader.BackgroundColor3 = COLORS.DANGER
+            dashHeaderFix.BackgroundColor3 = COLORS.DANGER
             updateUsersList()
-
-            -- Set initial tab state
-            generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
-            premiumTabBtn.BackgroundColor3 = COLORS.BACKGROUND
-            generalContent.Visible = true
-            premiumContent.Visible = false
         else
-            userDashboard.Visible = true
             showNotification("Welcome " .. username, "success")
-
-            -- Welcome sequence for user
-            welcomeMsg.Text = "Welcome to zonanra"
-            task.delay(5, function()
-                welcomeMsg.Text = "Choose your enhancements"
-            end)
+            dashTitle.Text = "ZONANRA DASHBOARD"
+            dashHeader.BackgroundColor3 = COLORS.PANEL
+            dashHeaderFix.BackgroundColor3 = COLORS.PANEL
         end
+
+        -- Set initial tab state
+        generalTabBtn.BackgroundColor3 = COLORS.PRIMARY
+        secondTabBtn.BackgroundColor3 = COLORS.BACKGROUND
+        generalContent.Visible = true
+        secondContent.Visible = false
+
     else
         showNotification("Invalid credentials", "error")
     end
@@ -1396,7 +1421,6 @@ local function performLogout()
 
     -- Show login screen with suggestions
     userDashboard.Visible = false
-    adminPanel.Visible = false
     loginContainer.Visible = true
     
     -- Clear inputs
@@ -1426,4 +1450,3 @@ end
 
 -- Logout functionality
 logoutBtn.MouseButton1Click:Connect(performLogout)
-adminLogoutBtn.MouseButton1Click:Connect(performLogout)
